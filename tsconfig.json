@@ -14,8 +14,7 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "sourceMap": true,
-    "rootDir": "./src"
+    "sourceMap": true
   },
   "include": ["src/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]
