@@ -1,7 +1,7 @@
-# LOBBY — Design v2
+# The Founder Inbox Agent — Design v2 (final)
 
-> **Status**: Scope-collapsed v2 after Codex (6.2/10) + Gemini (4/10 feasibility) adversarial review.
-> **Changed**: rename (RESPONDER → LOBBY), scope cut to single-channel, verifier agent added, evidence-grounded trust UX, Node not Bun, credible metrics, Day 3 offloaded.
+> **Status**: v2 approved by Codex (8.9/10, AGREE) + Gemini (9.0/10, AGREE). Ship-with-confidence verdict on both.
+> **Working codename**: *"the Founder Inbox Agent"* (final name TBD pre-submission — LOBBY and ATTEST both collide with existing AI products in adjacent spaces: thelobby.ai, attestdb.com, askattest.com).
 > **Target**: Cerebral Valley × Anthropic "Built with Opus 4.7" (Apr 21-26, 2026, $100k prize).
 
 ---
@@ -255,12 +255,14 @@ Pipeline on camera:
 
 ## 7. Day-by-day plan (v2 — cuts)
 
-### Day 0 (Apr 19-20, pre-start, IF we're accepted + have time)
-- Node 24 LTS scaffold
-- Gmail OAuth end-to-end
-- Claude Agent SDK stub with placeholder agents
-- Label 100 messages from Adel's recent Gmail as ground truth
-- neuromcp card schema + CRUD
+### Day 0 (Apr 19-20, pre-start) — MANDATORY prep (regardless of acceptance)
+These are non-cancelable because Day 1 EOD depends on them. If not accepted, this work is still useful infrastructure for personal use.
+
+- Node 24 LTS scaffold + pnpm + TypeScript 5.6 + repo skeleton
+- Claude Agent SDK stub with 5 placeholder agents (classifier/memory/drafter/verifier/planner)
+- neuromcp card schema in markdown frontmatter + CRUD lib
+- **Gmail OAuth end-to-end** — requires Adel's 5-min interaction for Google auth flow
+- Label 100 messages from Adel's recent Gmail as ground truth (labeling script that asks Adel to tag per message)
 
 ### Day 1 (Apr 21) — CORE LOOP ONLY
 - End of day: Gmail poll → Classifier → Memory → Drafter → Verifier → console log

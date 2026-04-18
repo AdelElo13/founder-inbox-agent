@@ -1,0 +1,32 @@
+{
+  "name": "founder-inbox-agent",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Evidence-grounded inbound agent for solo founders. Built for Cerebral Valley x Anthropic Opus 4.7 hackathon.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx --watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "label": "tsx scripts/label-messages.ts",
+    "eval": "tsx scripts/eval-classifier.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.114",
+    "@anthropic-ai/sdk": "^0.90.0",
+    "googleapis": "^171.4.0",
+    "telegraf": "^4.16.3",
+    "zod": "^4.3.6",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  }
+}

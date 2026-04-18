@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# Local data (memory, eval fixtures, metrics)
+data/
+metrics/
+
+# OS
+.DS_Store
