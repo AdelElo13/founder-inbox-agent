@@ -153,8 +153,52 @@ web alternatives usually exist.
 
 ---
 
+## #9 — OCR char confusion on monospace tokens (`l/1`, `O/0`)
+**Trigger**: `ocr_screen` on monospace text containing `l` (lowercase L),
+`1` (one), `O` (uppercase O), `0` (zero). Fonts like Telegram's monospace
+distinguish these, but the OCR model conflates them.
+
+**Repro**: Telegram bot token `8768274745:AAFIzGAOAsZBl0GBYscIYHhJIDLoaLjO2hk`
+(ground truth from clipboard). OCR returned
+`8768274745:AAFIzGAOAsZB10GBYscIYHhJIDLoaLj02hk` (Bl→B1, LjO→Lj0).
+
+**Workaround that worked**: `mouse_event(double_click)` on the token in a
+Telegram message + `press_key("c", ["cmd"])` + `clipboard_read`. Telegram's
+code-block component selects the whole token on double-click. This gave the
+exact ASCII — including a `TelegramTextPboardType` flavor in the pasteboard
+so we could detect that the paste came from Telegram specifically.
+
+**Fix suggestions**: (a) recommend clipboard-based extraction for
+security-critical strings in the tool docs. (b) optional `ocr_screen` mode
+that runs two different OCR passes and flags disagreements. (c) language
+hint `["code"]` that uses a monospace-aware model. Low priority — the
+workaround is reliable.
+
+**Severity**: medium for agent workflows that extract tokens / hashes / IDs
+from UIs.
+
+---
+
+## #10 — `mac-control-mcp` has no `triple_click` / range select primitive
+**Trigger**: need to select an entire line of text in an app without an AX
+tree (Telegram message body, monospace code blocks spanning >1 visual line).
+
+**Observed**: `mouse_event` supports `move / click / double_click`. No
+`triple_click`, no drag-select helper. `drag_and_drop` works for actual
+drag gestures but isn't wired to "select text range".
+
+**Fix**: add `triple_click` to the action enum (three rapid single clicks
+within the system's multi-click threshold). Also consider a `select_range`
+helper that does `mouseDown → drag → mouseUp` between two coords.
+
+**Severity**: low — workaround in this case was double_click, which Telegram
+treats as "select word" and fortunately the token is one word.
+
+---
+
 ## Stats
 
 - Sessions where findings came from: 1 (hackathon Day 0–Day 2).
-- Apps exercised: Chrome (Google Cloud Console, Google OAuth), Terminal, Telegram (native).
-- Findings total: 8 bugs + 4 reliable workarounds.
+- Apps exercised: Chrome (Google Cloud Console, Google OAuth), Terminal,
+  Telegram (native).
+- Findings total: 10 bugs + 5 reliable workarounds.
