@@ -12,6 +12,7 @@
     "dev": "tsx --watch src/index.ts",
     "start": "node --import tsx src/index.ts",
     "auth": "tsx scripts/gmail-auth.ts",
+    "telegram": "tsx scripts/telegram-poll.ts",
     "seed": "tsx scripts/seed-fixtures.ts",
     "label": "tsx scripts/label-messages.ts",
     "eval": "tsx scripts/eval-classifier.ts",

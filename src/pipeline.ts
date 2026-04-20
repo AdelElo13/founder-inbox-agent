@@ -1,11 +1,16 @@
 import { pollGmail } from "./gmail/poller.ts";
 import { classify } from "./agents/classifier.ts";
 import { recall } from "./agents/memory.ts";
-import { draft } from "./agents/drafter.ts";
+import { draft as draftReply } from "./agents/drafter.ts";
 import { verify } from "./agents/verifier.ts";
 import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
+import { surfaceForApproval } from "./telegram/bot.ts";
 import type { UnifiedMessage } from "./types.ts";
+
+const TELEGRAM_ENABLED = Boolean(
+  process.env["TELEGRAM_BOT_TOKEN"] && process.env["TELEGRAM_FOUNDER_CHAT_ID"],
+);
 
 export async function runOnce(): Promise<void> {
   const messages = await pollGmail();
@@ -13,6 +18,11 @@ export async function runOnce(): Promise<void> {
     console.log("[pipeline] no new messages");
     return;
   }
+
+  console.log(
+    `[pipeline] ${messages.length} message${messages.length === 1 ? "" : "s"} to process` +
+      (TELEGRAM_ENABLED ? " (Telegram ON)" : " (Telegram OFF — set TELEGRAM_BOT_TOKEN + TELEGRAM_FOUNDER_CHAT_ID)"),
+  );
 
   for (const msg of messages) {
     await processMessage(msg);
@@ -24,15 +34,49 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
 
   const intent = await classify(msg);
   const card = await recall(msg, intent);
-  const drafted = await draft(msg, card, intent);
+
+  let drafted;
+  if (intent.label === "noise") {
+    drafted = {
+      body: "",
+      claims: [],
+      confidence: 0,
+      verifierPass: false,
+      verifierNotes: "noise: drafter skipped",
+    };
+  } else {
+    drafted = await draftReply(msg, card, intent);
+  }
+
   const verified = await verify(drafted, card, msg);
   const action = await plan(verified, intent, card);
   const decision = gate(action);
 
   const elapsed = Date.now() - started;
+
+  if (decision.type === "escalate" && TELEGRAM_ENABLED) {
+    try {
+      const item = await surfaceForApproval({
+        id: `${msg.id}-${started}`,
+        gmailMessageId: msg.id,
+        gmailThreadId: msg.threadId,
+        from: msg.from,
+        subject: msg.subject,
+        inboundPreview: msg.body.slice(0, 300),
+        draft: verified,
+        plan: action,
+      });
+      console.log(
+        `[pipeline] msg=${msg.id} intent=${intent.label} → escalate (telegram=${item.id}) elapsed_ms=${elapsed}`,
+      );
+      return;
+    } catch (err) {
+      console.warn(`[pipeline] telegram surface failed for ${msg.id}:`, err);
+    }
+  }
+
   console.log(
-    `[pipeline] msg=${msg.id} intent=${intent.label} ` +
-      `verified=${verified.verifierPass} decision=${decision.type} ` +
-      `elapsed_ms=${elapsed}`,
+    `[pipeline] msg=${msg.id} intent=${intent.label} verified=${verified.verifierPass} ` +
+      `decision=${decision.type} elapsed_ms=${elapsed}`,
   );
 }
