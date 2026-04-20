@@ -5,8 +5,9 @@ import { draft as draftReply } from "./agents/drafter.ts";
 import { verify } from "./agents/verifier.ts";
 import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
+import { researchSender } from "./research/sender.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
-import type { UnifiedMessage } from "./types.ts";
+import type { ResearchCard, UnifiedMessage } from "./types.ts";
 
 function telegramEnabled(): boolean {
   // Evaluated lazily — module-time check fires before index.ts loads dotenv.
@@ -39,6 +40,13 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
   const intent = await classify(msg);
   const card = await recall(msg, intent);
 
+  // Public-signal research fires only when we have no card and the intent
+  // is worth replying to. Skipping for noise saves a handful of HTTP calls.
+  let research: ResearchCard | null = null;
+  if (!card && intent.label !== "noise" && intent.label !== "unknown") {
+    research = await researchSender(msg);
+  }
+
   let drafted;
   if (intent.label === "noise") {
     drafted = {
@@ -49,10 +57,10 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
       verifierNotes: "noise: drafter skipped",
     };
   } else {
-    drafted = await draftReply(msg, card, intent);
+    drafted = await draftReply(msg, card, intent, research);
   }
 
-  const verified = await verify(drafted, card, msg);
+  const verified = await verify(drafted, card, msg, research);
   const action = await plan(verified, intent, card);
   const decision = gate(action);
 

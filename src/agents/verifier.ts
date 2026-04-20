@@ -3,6 +3,7 @@ import type {
   DraftWithEvidence,
   EvidenceClaim,
   RelationshipCard,
+  ResearchCard,
   UnifiedMessage,
 } from "../types.ts";
 
@@ -30,6 +31,7 @@ export async function verify(
   draft: DraftWithEvidence,
   card: RelationshipCard | null,
   msg: UnifiedMessage,
+  research?: ResearchCard | null,
 ): Promise<DraftWithEvidence> {
   if (draft.body.trim().length === 0) {
     return { ...draft, verifierPass: false, verifierNotes: "empty body" };
@@ -66,12 +68,12 @@ export async function verify(
       };
     }
 
-    const resolved = claim.cites.some((c) => resolveCitation(c, card, msg));
+    const resolved = claim.cites.some((c) => resolveCitation(c, card, msg, research ?? null));
     if (!resolved) {
       return {
         ...draft,
         verifierPass: false,
-        verifierNotes: `claim #${i}: none of ${claim.cites.length} citations resolved to card/msg`,
+        verifierNotes: `claim #${i}: none of ${claim.cites.length} citations resolved to card/msg/research`,
       };
     }
   }
@@ -83,6 +85,7 @@ function resolveCitation(
   cite: Citation,
   card: RelationshipCard | null,
   msg: UnifiedMessage,
+  research: ResearchCard | null,
 ): boolean {
   const excerpt = cite.excerpt.trim().toLowerCase();
   if (!excerpt) return false;
@@ -90,6 +93,18 @@ function resolveCitation(
   if (cite.source === "inbound_message") {
     const haystack = `${msg.subject} ${msg.body}`.toLowerCase();
     return haystack.includes(excerpt.slice(0, 120));
+  }
+
+  if (cite.source === "research") {
+    if (!research || !research.snippetIds.includes(cite.refId)) return false;
+    // refId format: "<url>#<idx>" — look up that specific snippet and match.
+    const hash = cite.refId.lastIndexOf("#");
+    if (hash < 0) return false;
+    const url = cite.refId.slice(0, hash);
+    const idx = Number(cite.refId.slice(hash + 1));
+    const snippet = research.snippets[url]?.[idx];
+    if (!snippet) return false;
+    return snippet.toLowerCase().includes(excerpt.slice(0, 120));
   }
 
   if (!card) return false;
@@ -122,6 +137,7 @@ export function claimResolvable(
   claim: EvidenceClaim,
   card: RelationshipCard | null,
   msg: UnifiedMessage,
+  research: ResearchCard | null = null,
 ): boolean {
-  return claim.cites.some((c) => resolveCitation(c, card, msg));
+  return claim.cites.some((c) => resolveCitation(c, card, msg, research));
 }

@@ -5,13 +5,14 @@ import type {
   EvidenceClaim,
   IntentResult,
   RelationshipCard,
+  ResearchCard,
   UnifiedMessage,
 } from "../types.ts";
 
 const MODEL = process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-7";
 
 const CitationSchema = z.object({
-  source: z.enum(["interaction", "inbound_message", "context", "ask"]),
+  source: z.enum(["interaction", "inbound_message", "context", "ask", "research"]),
   refId: z.string().min(1),
   excerpt: z.string().min(1).max(400),
 });
@@ -46,14 +47,12 @@ OUTPUT: JSON object (no prose outside JSON, no code fences) with:
 Each claim:
 {
   "textMatch": string,        // a VERBATIM substring of "body" (3-300 chars) that
-                              // represents the factual statement — e.g. "we met at
-                              // Paris AI Summit" — must appear character-for-character
-                              // in body (case-sensitive). The Verifier checks this.
+                              // represents the factual statement.
   "cites": [                  // MUST have at least one citation
     {
-      "source": "interaction" | "inbound_message" | "context" | "ask",
-      "refId":  string,         // card interaction/ask id, OR "inbound" for the email body
-      "excerpt": string         // the exact memory/email line justifying the claim
+      "source": "interaction" | "inbound_message" | "context" | "ask" | "research",
+      "refId":  string,         // card/ask id, OR "inbound", OR research snippet id ("<url>#<idx>")
+      "excerpt": string         // the exact memory/email/research line justifying the claim
     }
   ]
 }
@@ -61,8 +60,11 @@ Each claim:
 RULES:
 1. Every factual claim must have a non-empty cites array. No claim = no fact.
 2. Purely conversational sentences ("Thanks!", "Let's talk soon") don't need claims.
-3. If CARD is NEW_CONTACT, the only valid source is "inbound_message" — you do
-   not know anything about this person beyond the email in hand.
+3. If CARD is NEW_CONTACT, allowed sources are "inbound_message" and "research"
+   only. You do NOT know anything about this person beyond the inbound email
+   plus the RESEARCH snippets attached. Do NOT invent shared history.
+   When citing research, use the EXACT snippet id as refId (e.g.
+   "https://acme.com#2") and quote a verbatim excerpt from that snippet.
 4. For investor / press intent: the body MUST NOT commit to anything concrete.
    Propose 2-3 time slots or acknowledge and ask for availability — do not
    share private metrics, investor lists, customer names, or financials.
@@ -87,12 +89,13 @@ export async function draft(
   msg: UnifiedMessage,
   card: RelationshipCard | null,
   intent: IntentResult,
+  research: ResearchCard | null,
   options: DrafterOptions = {},
 ): Promise<DraftWithEvidence> {
   const client = options.client ?? new Anthropic();
   const model = options.model ?? MODEL;
 
-  const userBlock = renderContext(msg, card, intent);
+  const userBlock = renderContext(msg, card, intent, research);
 
   const response = await client.messages.create({
     model,
@@ -128,8 +131,13 @@ function renderContext(
   msg: UnifiedMessage,
   card: RelationshipCard | null,
   intent: IntentResult,
+  research: ResearchCard | null,
 ): string {
-  const cardBlock = card ? renderCard(card) : "CARD: NEW_CONTACT (no prior memory)";
+  const cardBlock = card
+    ? renderCard(card)
+    : "CARD: NEW_CONTACT (no prior memory)";
+  const researchBlock = research ? renderResearch(research) : "";
+
   return [
     `INTENT: ${intent.label} (urgency=${intent.urgency}, risk=${intent.risk}, confidence=${intent.confidence.toFixed(2)})`,
     `CLASSIFIER_REASONING: ${intent.reasoning}`,
@@ -142,7 +150,27 @@ function renderContext(
     indent(msg.body.slice(0, 3000), 4),
     ``,
     cardBlock,
-  ].join("\n");
+    researchBlock,
+  ]
+    .filter((s) => s.length > 0)
+    .join("\n");
+}
+
+function renderResearch(r: ResearchCard): string {
+  if (r.error) {
+    return `\nRESEARCH: none available (${r.error}). Cite only inbound_message.`;
+  }
+  const lines: string[] = [
+    ``,
+    `RESEARCH (public signals on the sender — snippet ids are "<url>#<idx>"):`,
+  ];
+  for (const [url, snippets] of Object.entries(r.snippets)) {
+    lines.push(`  source: ${url}`);
+    snippets.forEach((s, i) => {
+      lines.push(`    [${url}#${i}] ${s}`);
+    });
+  }
+  return lines.join("\n");
 }
 
 function renderCard(card: RelationshipCard): string {

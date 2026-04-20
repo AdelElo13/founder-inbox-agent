@@ -76,9 +76,24 @@ export interface RelationshipCard {
 }
 
 export interface Citation {
-  source: "interaction" | "inbound_message" | "context" | "ask";
+  source: "interaction" | "inbound_message" | "context" | "ask" | "research";
   refId: string;
   excerpt: string;
+}
+
+/**
+ * Public-signal research on an unknown sender. Populated by src/research/sender.ts
+ * when Memory returns null (new contact). Drafter references these findings as
+ * Citation.source="research"; Verifier checks the excerpt is in findings.snippets.
+ */
+export interface ResearchCard {
+  target: { name: string; email: string; domain: string };
+  fetchedAt: string;
+  /** URL-keyed map of snippet arrays — each snippet is a short verbatim quote. */
+  snippets: Record<string, string[]>;
+  /** Flat list of all snippet ids (url#idx) for easy Citation.refId lookup. */
+  snippetIds: string[];
+  error?: string;
 }
 
 export interface EvidenceClaim {

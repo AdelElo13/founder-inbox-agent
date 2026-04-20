@@ -7,6 +7,7 @@ import { draft } from "../src/agents/drafter.ts";
 import { verify } from "../src/agents/verifier.ts";
 import { plan } from "../src/agents/planner.ts";
 import { gate } from "../src/confidence/gate.ts";
+import { researchSender } from "../src/research/sender.ts";
 import { GOLD } from "../src/fixtures/messages.ts";
 
 async function main(): Promise<void> {
@@ -27,6 +28,11 @@ async function main(): Promise<void> {
     const intent = await classify(msg);
     const card = await recall(msg, intent);
 
+    let research: Awaited<ReturnType<typeof researchSender>> | null = null;
+    if (!card && intent.label !== "noise" && intent.label !== "unknown") {
+      research = await researchSender(msg);
+    }
+
     let drafted;
     if (intent.label === "noise") {
       drafted = {
@@ -37,10 +43,10 @@ async function main(): Promise<void> {
         verifierNotes: "noise: drafter skipped",
       };
     } else {
-      drafted = await draft(msg, card, intent);
+      drafted = await draft(msg, card, intent, research);
     }
 
-    const verified = await verify(drafted, card, msg);
+    const verified = await verify(drafted, card, msg, research);
     if (!verified.verifierPass && verified.body.length > 0) {
       verifierRejections += 1;
     }
