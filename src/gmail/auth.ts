@@ -107,13 +107,30 @@ export function getGmailClient(): gmail_v1.Gmail {
 }
 
 /**
- * Minimal stdin reader — avoids pulling in readline for a single prompt.
+ * Read a single line from stdin. Resolves on the first newline OR on EOF
+ * (Ctrl+D). Earlier versions waited only for EOF, which caused the auth
+ * script to hang after the user pasted + Enter — hitting Enter does not
+ * close stdin on a TTY.
  */
 async function readLine(): Promise<string> {
   return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on("data", (c: Buffer) => chunks.push(c));
-    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    let buffer = "";
+    const onData = (chunk: Buffer): void => {
+      buffer += chunk.toString("utf8");
+      const newline = buffer.indexOf("\n");
+      if (newline !== -1) {
+        process.stdin.off("data", onData);
+        process.stdin.off("end", onEnd);
+        process.stdin.pause();
+        resolve(buffer.slice(0, newline));
+      }
+    };
+    const onEnd = (): void => {
+      process.stdin.off("data", onData);
+      resolve(buffer);
+    };
+    process.stdin.on("data", onData);
+    process.stdin.on("end", onEnd);
     process.stdin.resume();
   });
 }
