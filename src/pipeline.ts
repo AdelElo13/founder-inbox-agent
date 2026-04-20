@@ -7,8 +7,66 @@ import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
 import { researchSender } from "./research/sender.ts";
 import { recordPipelineOutcome } from "./metrics/events.ts";
+import { scanForInjection } from "./security/injection.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
-import type { ResearchCard, UnifiedMessage } from "./types.ts";
+import type { ActionPlan, GateDecision, IntentResult, ResearchCard, UnifiedMessage } from "./types.ts";
+
+async function handleFlagged(
+  msg: UnifiedMessage,
+  started: number,
+  reason: string,
+): Promise<void> {
+  const elapsed = Date.now() - started;
+  const intent: IntentResult = {
+    label: "unknown",
+    urgency: "today",
+    risk: "high",
+    confidence: 0,
+    reasoning: `BLOCKED: ${reason}`,
+  };
+  const plan: ActionPlan = {
+    intent: "unknown",
+    urgency: "today",
+    confidence: 0,
+    riskTier: "high",
+    requiresApproval: true,
+    approvalReason: `prompt-injection guard tripped: ${reason}`,
+    steps: [
+      {
+        type: "route_to",
+        target: "telegram",
+        note: "Flagged as prompt injection — founder must review raw email.",
+      },
+    ],
+  };
+  const decision: GateDecision = {
+    type: "escalate",
+    plan,
+    reason: `prompt-injection: ${reason}`,
+  };
+
+  console.log(
+    `[pipeline] msg=${msg.id} BLOCKED by injection guard — ${reason}`,
+  );
+
+  recordPipelineOutcome({
+    msg,
+    intent,
+    cardMatched: false,
+    researchAttempted: false,
+    researchUrls: 0,
+    draft: {
+      body: "",
+      claims: [],
+      confidence: 0,
+      verifierPass: false,
+      verifierNotes: `injection guard: ${reason}`,
+    },
+    plan,
+    decision,
+    elapsedMs: elapsed,
+  });
+}
 
 function telegramEnabled(): boolean {
   // Evaluated lazily — module-time check fires before index.ts loads dotenv.
@@ -37,6 +95,17 @@ export async function runOnce(): Promise<void> {
 
 async function processMessage(msg: UnifiedMessage): Promise<void> {
   const started = Date.now();
+
+  // First line of defence: prompt-injection scan. If the message carries a
+  // known pattern, short-circuit to "unknown + escalate" — we never run the
+  // classifier/drafter on adversarial content, so the model can't be tricked
+  // into auto-sending or exfiltrating the system prompt. The founder sees
+  // the raw email plus the reason and decides.
+  const injection = scanForInjection(msg);
+  if (injection.flagged) {
+    await handleFlagged(msg, started, injection.reason ?? "prompt injection");
+    return;
+  }
 
   const intent = await classify(msg);
   const card = await recall(msg, intent);
