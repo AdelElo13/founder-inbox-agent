@@ -24,6 +24,16 @@ async function handleFlagged(
     confidence: 0,
     reasoning: `BLOCKED: ${reason}`,
   };
+  const draft = {
+    body:
+      "🛡 BLOCKED by injection guard. No draft generated.\n\n" +
+      `Reason: ${reason}\n\n` +
+      "Raw email preview below — review before taking any action.",
+    claims: [],
+    confidence: 0,
+    verifierPass: false,
+    verifierNotes: `injection guard: ${reason}`,
+  };
   const plan: ActionPlan = {
     intent: "unknown",
     urgency: "today",
@@ -49,22 +59,36 @@ async function handleFlagged(
     `[pipeline] msg=${msg.id} BLOCKED by injection guard — ${reason}`,
   );
 
+  let telegramCardId: string | undefined;
+  if (telegramEnabled()) {
+    try {
+      const item = await surfaceForApproval({
+        id: `${msg.id}-${started}-blocked`,
+        gmailMessageId: msg.id,
+        gmailThreadId: msg.threadId,
+        from: msg.from,
+        subject: `🛡 BLOCKED: ${msg.subject}`.slice(0, 120),
+        inboundPreview: msg.body.slice(0, 300),
+        draft,
+        plan,
+      });
+      telegramCardId = item.id;
+    } catch (err) {
+      console.warn(`[pipeline] telegram surface failed for ${msg.id}:`, err);
+    }
+  }
+
   recordPipelineOutcome({
     msg,
     intent,
     cardMatched: false,
     researchAttempted: false,
     researchUrls: 0,
-    draft: {
-      body: "",
-      claims: [],
-      confidence: 0,
-      verifierPass: false,
-      verifierNotes: `injection guard: ${reason}`,
-    },
+    draft,
     plan,
     decision,
     elapsedMs: elapsed,
+    ...(telegramCardId && { telegramCardId }),
   });
 }
 

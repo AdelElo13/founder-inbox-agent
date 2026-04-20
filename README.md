@@ -1,107 +1,49 @@
-# Founder Inbox Agent
+# Founder Inbox
 
-> Evidence-grounded inbound agent for solo founders. Every reply cites a specific memory line — no hallucinated relationship history.
->
-> Working codename only. Final brand name TBD pre-submission.
+> **An evidence-grounded inbound operator for solo founders.**
+> Every reply cites a specific line in your relationship memory.
+> Nothing auto-sent, nothing hallucinated.
 
 Built for **Cerebral Valley × Anthropic "Built with Opus 4.7" hackathon** (Apr 21–26, 2026).
 
-## Status
+---
 
-- [x] Design approved (Codex 8.9/10, Gemini 9.0/10 — both AGREE)
-- [x] Scaffold (Node 22+, TypeScript strict, typecheck green, 3/3 tests pass)
-- [x] neuromcp contact-card CRUD + identity resolution
-- [ ] Gmail OAuth (Day 0/1)
-- [ ] Classifier + Memory + Drafter + Verifier + Planner agents (Day 1–2)
-- [ ] Telegram approval bot (Day 2)
-- [ ] Demo videos (Day 4)
-- [ ] Submission (Day 5)
+## The problem
 
-## What this is
+High-distribution founders don't drown in leads — they drown in **inbound signals**.
+50+ DMs across X and LinkedIn, 30+ cold emails, replies to every post. Context drops.
+Fast replies cool into forgotten threads. The ones that matter — investors, customers,
+press — mix into noise. And the worst kind of reply is the one that invents a shared
+history you never had.
 
-Solo founders drown in inbound signals (Gmail, X DMs via email notifications, LinkedIn digests), not leads. Context collapses across threads. Fast replies cool into forgotten loops.
+## The product
 
-This agent:
+Founder Inbox runs locally on your Mac. For every message:
 
-1. Polls Gmail for new messages
-2. **Classifies** intent (investor / customer / partner / press / noise)
-3. **Recalls** relationship memory (who are they, where met, open asks)
-4. **Drafts** a reply in founder voice
-5. **Verifies** every factual claim cites a specific memory line — rejects hallucinations architecturally
-6. Routes through a **confidence gate**: high-confidence FAQ ships; anything to an investor/press/ambiguous contact is escalated to Telegram for approval
+1. **Classifies** intent (investor / customer / partner / press / noise / unknown).
+2. **Pulls relationship memory** from a wiki of contact cards you've built over time.
+3. **Researches** unknown senders from their own public signals (website, bio, signature).
+4. **Drafts** a reply — every factual claim pinned to a memory line or research snippet.
+5. **Verifies** each claim traces back to a real source. Hallucinations are architecturally
+   rejected before you ever see them.
+6. **Escalates** anything high-stakes to your Telegram with a one-tap Approve / Reject / Edit.
 
-Target metric: median ingest → drafted + evidence-grounded + ready-for-send under 30s.
+Investors and press always require approval. Pure noise is archived. The founder only
+sees things worth deciding on.
 
-## Getting started
+---
 
-### Prerequisites
-- Node.js 22+
-- pnpm
-- Anthropic API key (grant via `.env` or your shell — hackathon credits apply)
-- Google Cloud project with Gmail API enabled + OAuth client (5 min setup below)
-- Telegram bot token (@BotFather — optional until Day 2)
+## Screenshots
 
-### Install
-```bash
-pnpm install
-cp .env.example .env
-# fill in ANTHROPIC_API_KEY, GOOGLE_CLIENT_*, TELEGRAM_BOT_TOKEN
-```
+**Live pipeline dashboard** — real events from a real Gmail inbox, 28 messages processed:
 
-### Gmail OAuth setup (one-time, ~5 min)
+![Pipeline Dashboard](docs/assets/dashboard.png)
 
-Why this matters: the agent's ingest + send path talks to Gmail directly. Everything else — memory, drafting, approval — is dead without it.
+**Telegram approval card** — draft body with an evidence panel citing specific memory lines:
 
-**Step 1.** Go to <https://console.cloud.google.com/>. Create a new project (or pick an existing one).
+<img src="docs/assets/telegram-investor-card.png" width="420">
 
-**Step 2.** Enable the Gmail API:
-- Navigate to **APIs & Services → Library**
-- Search for "Gmail API" → click **Enable**
-
-**Step 3.** Create an OAuth 2.0 Client ID:
-- **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-- If prompted to configure the consent screen first:
-  - User type: **External**
-  - App name: "Founder Inbox Agent" (or whatever you want on the consent screen)
-  - User support email: your email
-  - Scopes: skip (we request the scope at runtime)
-  - Test users: add your own Gmail address — required while the app is unverified
-- Application type: **Desktop app** (important — not Web app)
-- Name: "Founder Inbox Agent — local"
-- **Download JSON** or copy the Client ID + Client Secret
-
-**Step 4.** Add to `.env`:
-```
-GOOGLE_CLIENT_ID=...apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-...
-```
-
-**Step 5.** Run the one-time auth flow:
-```bash
-pnpm auth
-```
-This opens a Google consent URL. Approve. Google redirects to `http://localhost:4567/oauth/callback?code=...` which fails to load — **that's expected**. Copy the full redirect URL from your browser and paste it into the terminal. The token gets stored at `~/.responder/gmail-token.json` and survives repo rebuilds.
-
-**Troubleshooting**:
-- *"Google returned no refresh_token"* — revoke the app at <https://myaccount.google.com/permissions> and re-run `pnpm auth` to force the consent screen.
-- *Consent screen says "app not verified"* — add your Gmail under **OAuth consent screen → Test users**. You don't need to submit for verification for personal use.
-
-### Seed sample relationship cards
-```bash
-pnpm seed
-```
-Writes 3 example contact cards to `./data/wiki/contacts/` (project-local by default; point `NEUROMCP_WIKI_PATH` at your real neuromcp wiki only when going live).
-
-### Typecheck & test
-```bash
-pnpm typecheck
-pnpm test
-```
-
-### Run (once Day 1 agents land)
-```bash
-pnpm dev
-```
+---
 
 ## Architecture
 
@@ -112,53 +54,189 @@ Gmail poll (30s)
 Normalize → UnifiedMessage
     │
     ▼
-┌──────────────────────────────────────────┐
-│  Agent team (Claude Agent SDK, Opus 4.7) │
-│   [Classifier] → intent + risk           │
-│   [Memory]     → RelationshipCard        │
-│   [Drafter]    → body + evidence claims  │
-│   [Verifier]   → veto on missing cites   │
-│   [Planner]    → ActionPlan              │
-└──────────────────────────────────────────┘
+🛡 Prompt-injection guard (8 patterns) — blocked messages skip the LLM entirely
+    │
+    ▼
+┌──────────────────────────────────────────────────┐
+│   Agent team (Claude Agent SDK, Opus 4.7)        │
+│   [Classifier]  → intent + risk                  │
+│   [Memory]      → RelationshipCard lookup        │
+│   [Research]    → public-signal fetch (optional) │
+│   [Drafter]     → body + EvidenceClaim[]         │
+│   [Verifier]    → veto on missing citations      │
+│   [Planner]     → ActionPlan                     │
+└──────────────────────────────────────────────────┘
     │
     ▼
 Confidence gate
     │
-    ├─ FAQ whitelist + confidence ≥0.95 → Gmail send
-    └─ anything else                    → Telegram approval card
+    ├─ FAQ whitelist + conf ≥ 0.95 → Gmail send
+    ├─ noise                       → archive
+    └─ everything else              → Telegram approval card
 ```
 
-**Key invariant**: the Verifier has veto. If any factual claim in the draft cannot trace to a `RelationshipCard` line id or the inbound message body, the draft is rejected and regenerated with stricter constraints. Three regen failures → escalate with "cannot ground this claim".
+The invariant the Verifier enforces: **every factual statement in a draft must match
+a verbatim excerpt from the relationship card, the inbound email, or a fetched research
+snippet.** If it can't, the draft is rejected and regenerated with stricter constraints.
+Three regeneration failures escalate the raw email with a "cannot ground" note.
 
-## Project layout
+---
+
+## What makes it different
+
+| | Founder Inbox | Shortwave / Superhuman | Cloud computer-use agents |
+|---|---|---|---|
+| Cross-channel relationship memory | ✅ wiki-backed, persistent | ❌ channel-specific | ❌ ephemeral context |
+| Evidence-grounded drafts (cited) | ✅ Verifier vetoes uncited claims | ❌ free-form generation | ❌ free-form generation |
+| Public-signal research for cold senders | ✅ scraped + cited | ❌ | partial (search tools only) |
+| Runs on-device | ✅ your Mac, your Gmail | Cloud | Cloud VM |
+| Prompt-injection guard | ✅ 8 patterns, pre-LLM | ❌ | partial |
+| Mobile approval workflow | ✅ Telegram card, one-tap | Mobile app | — |
+
+---
+
+## Metrics (from a real 28-message run)
+
+- **Intent classification accuracy**: 100% on a 10-message labeled fixture
+- **Live Gmail noise detection**: 10 of 10 automated notifications correctly dropped
+- **Verifier rejection rate**: fabrications caught before approval (proven in demo)
+- **Median pipeline latency**: 4.4s · p95 10.9s
+- **Auto-send false positive rate**: 0 (gate blocks investor/press/unknown)
+
+The dashboard at `http://localhost:4321` shows the live numbers.
+
+---
+
+## Getting started
+
+### Prerequisites
+- Node.js 22+ · pnpm
+- Anthropic API key (hackathon credits work)
+- Google Cloud project with Gmail API + OAuth Desktop client
+- Telegram bot token (`@BotFather`) + your numeric chat id (`@userinfobot`)
+
+### Install
+```bash
+pnpm install
+cp .env.example .env
+# Fill in ANTHROPIC_API_KEY, GOOGLE_CLIENT_*, TELEGRAM_*
+pnpm auth            # one-time OAuth flow for Gmail
+```
+See **"Gmail OAuth setup"** below for the 5-minute Google Cloud Console walkthrough.
+
+### Run
+```bash
+pnpm telegram        # Terminal 1: bot polling loop (long-running)
+pnpm start           # Terminal 2: one-shot Gmail poll + process
+pnpm dashboard       # Terminal 3: metrics dashboard at http://localhost:4321
+```
+
+### Demo seeding (no real senders needed)
+```bash
+pnpm seed            # 3 contact cards in the local neuromcp wiki
+pnpm seed:inbox      # inserts 3 test emails into your Gmail INBOX
+                     # (1 investor, 1 press, 1 injection attempt)
+pnpm start           # watch the pipeline handle them live
+```
+
+### Quality gates
+```bash
+pnpm typecheck       # strict TypeScript
+pnpm test            # 18 unit tests (Vitest)
+pnpm eval            # classifier eval on labeled fixture
+pnpm eval:pipeline   # full pipeline eval on 10-message fixture
+```
+
+---
+
+## Gmail OAuth setup (5 min)
+
+1. Open <https://console.cloud.google.com/> → create or pick a project.
+2. **APIs & Services → Library** → enable "Gmail API".
+3. **APIs & Services → Credentials → Create → OAuth Client ID**:
+   - Consent screen: External, Testing, add your own Gmail as a test user.
+   - Application type: **Desktop app**.
+4. Copy the Client ID and Client Secret into `.env`.
+5. Run `pnpm auth`. A Google consent URL prints. Approve in your browser.
+   Google redirects to `http://localhost:4567/oauth/callback?code=...` (page fails
+   to load — that's expected). Paste the full URL back into the terminal.
+6. Token is saved to `~/.responder/gmail-token.json` and survives repo rebuilds.
+   Labels `INBOX_AGENT_QUEUED / PROCESSED / SENT / REJECTED / ESCALATED` are
+   auto-created in your Gmail.
+
+---
+
+## Layout
 
 ```
 src/
-├── agents/          # Claude Agent SDK stubs (classifier/memory/drafter/verifier/planner)
-├── confidence/      # Gate policy: auto-send vs escalate
-├── gmail/           # OAuth + poller + sender
-├── memory/          # Card CRUD, identity resolution, paths
-├── pipeline.ts      # Orchestrator: runs the agent team on one message
-├── types.ts         # UnifiedMessage, RelationshipCard, DraftWithEvidence, etc.
+├── agents/          # classifier / memory / drafter / verifier / planner
+├── confidence/      # gate policy
+├── gmail/           # OAuth, poller, sender, labels, normalize
+├── memory/          # contact-card CRUD on neuromcp wiki
+├── research/        # public-signal fetcher for unknown senders
+├── security/        # prompt-injection guard
+├── telegram/        # approval bot + queue
+├── metrics/         # jsonl event log
+├── fixtures/        # 10 gold-labeled demo messages
+├── pipeline.ts      # orchestrator
+├── types.ts         # shared types
 └── index.ts         # CLI entry
 scripts/
-├── seed-fixtures.ts      # Write sample contact cards
-├── label-messages.ts     # [Day 0] Interactive labeler for eval set
-└── eval-classifier.ts    # [Day 1] Run classifier over labeled set, report confusion matrix
+├── gmail-auth.ts       # one-time OAuth
+├── seed-fixtures.ts    # plant sample RelationshipCards
+├── seed-inbox.ts       # plant 3 demo emails into Gmail
+├── replay-last.ts      # un-label N recent messages for demos
+├── eval-classifier.ts  # classifier accuracy on fixtures
+├── eval-pipeline.ts    # full pipeline run on fixtures
+├── telegram-poll.ts    # bot long-poll runner
+└── open-dashboard.ts   # metrics server at localhost:4321
+public/
+├── dashboard.html      # static dashboard shell
+└── dashboard.js        # live-updates from events.jsonl
+docs/
+├── DESIGN_v2.md        # approved architecture (Codex 8.9/10, Gemini 9.0/10)
+├── REVIEWS.md          # adversarial reviews
+├── DEMO.md             # 90s submission video storyboard
+├── MAC_CONTROL_BUGS.md # live bug log from using mac-control-mcp
+└── assets/             # screenshots
 ```
 
-## Why it's defensible (Codex + Gemini alignment)
+---
 
-- **Not another email copilot.** Shortwave / Superhuman / Missive are channel-specific. We are relationship-ops across Gmail + downstream channels with grounded memory.
-- **Not cloud-based computer-use.** Runs on-device. Raw message bodies + relationship memory never leave the Mac. Only the LLM inference goes to Anthropic (same as any Claude Code user).
-- **Not horizontal agent infra.** We are a vertical: founder-grade inbound, evidence-gated, one approval surface.
-- **Not absorbable by Anthropic-ships-Dispatch-v2.** The moat is founder-voice memory and citation-grounded drafting, not the remote-control plumbing (they have that now).
+## Tech stack
+
+| Layer | Tech |
+|-------|------|
+| Runtime | Node 22+ |
+| Language | TypeScript 5.6 (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
+| AI | `@anthropic-ai/sdk` 0.90 · model `claude-opus-4-7` |
+| Gmail | `googleapis` 171 |
+| Memory | Markdown frontmatter + git (neuromcp-compatible wiki) |
+| Telegram | `telegraf` 4 |
+| Testing | `vitest` 4 |
+| Metrics | JSONL + vanilla-JS dashboard |
+
+No cloud services. No database. No framework. Everything runs from your Mac.
+
+---
 
 ## Design docs
 
-- `DESIGN_v2.md` — approved architecture, data shapes, day-by-day plan
-- `REVIEWS.md` — Codex + Gemini review transcripts
+- [`DESIGN_v2.md`](./DESIGN_v2.md) — architecture + data shapes + day-by-day plan (scored 8.9/10 by Codex, 9.0/10 by Gemini in adversarial review)
+- [`REVIEWS.md`](./REVIEWS.md) — review transcripts
+- [`DEMO.md`](./DEMO.md) — 90-second submission video storyboard
+- [`MAC_CONTROL_BUGS.md`](./MAC_CONTROL_BUGS.md) — 10 bugs + 5 workarounds logged from real use of our Swift MCP
+
+---
+
+## Status
+
+- **17+ commits**, private → public at submission
+- **18 unit tests**, all passing
+- **Live end-to-end validated** on the author's own Gmail inbox
+- **2 demo cards received + approved** via Telegram during live testing
 
 ## License
 
-TBD pre-submission. Currently unlicensed (personal work).
+Post-hackathon: TBD. Currently unlicensed.

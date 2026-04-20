@@ -14,6 +14,7 @@
     "auth": "tsx scripts/gmail-auth.ts",
     "telegram": "tsx scripts/telegram-poll.ts",
     "replay": "tsx scripts/replay-last.ts",
+    "seed:inbox": "tsx scripts/seed-inbox.ts",
     "seed": "tsx scripts/seed-fixtures.ts",
     "label": "tsx scripts/label-messages.ts",
     "eval": "tsx scripts/eval-classifier.ts",
