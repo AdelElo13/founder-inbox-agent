@@ -37,9 +37,9 @@ Target metric: median ingest → drafted + evidence-grounded + ready-for-send un
 ### Prerequisites
 - Node.js 22+
 - pnpm
-- Anthropic API key
-- Google Cloud project with Gmail API enabled + OAuth client
-- Telegram bot token (@BotFather)
+- Anthropic API key (grant via `.env` or your shell — hackathon credits apply)
+- Google Cloud project with Gmail API enabled + OAuth client (5 min setup below)
+- Telegram bot token (@BotFather — optional until Day 2)
 
 ### Install
 ```bash
@@ -48,11 +48,49 @@ cp .env.example .env
 # fill in ANTHROPIC_API_KEY, GOOGLE_CLIENT_*, TELEGRAM_BOT_TOKEN
 ```
 
+### Gmail OAuth setup (one-time, ~5 min)
+
+Why this matters: the agent's ingest + send path talks to Gmail directly. Everything else — memory, drafting, approval — is dead without it.
+
+**Step 1.** Go to <https://console.cloud.google.com/>. Create a new project (or pick an existing one).
+
+**Step 2.** Enable the Gmail API:
+- Navigate to **APIs & Services → Library**
+- Search for "Gmail API" → click **Enable**
+
+**Step 3.** Create an OAuth 2.0 Client ID:
+- **APIs & Services → Credentials → Create Credentials → OAuth client ID**
+- If prompted to configure the consent screen first:
+  - User type: **External**
+  - App name: "Founder Inbox Agent" (or whatever you want on the consent screen)
+  - User support email: your email
+  - Scopes: skip (we request the scope at runtime)
+  - Test users: add your own Gmail address — required while the app is unverified
+- Application type: **Desktop app** (important — not Web app)
+- Name: "Founder Inbox Agent — local"
+- **Download JSON** or copy the Client ID + Client Secret
+
+**Step 4.** Add to `.env`:
+```
+GOOGLE_CLIENT_ID=...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+```
+
+**Step 5.** Run the one-time auth flow:
+```bash
+pnpm auth
+```
+This opens a Google consent URL. Approve. Google redirects to `http://localhost:4567/oauth/callback?code=...` which fails to load — **that's expected**. Copy the full redirect URL from your browser and paste it into the terminal. The token gets stored at `~/.responder/gmail-token.json` and survives repo rebuilds.
+
+**Troubleshooting**:
+- *"Google returned no refresh_token"* — revoke the app at <https://myaccount.google.com/permissions> and re-run `pnpm auth` to force the consent screen.
+- *Consent screen says "app not verified"* — add your Gmail under **OAuth consent screen → Test users**. You don't need to submit for verification for personal use.
+
 ### Seed sample relationship cards
 ```bash
 pnpm seed
 ```
-Writes 3 example contact cards to `~/.neuromcp/wiki/contacts/` (configurable via `NEUROMCP_WIKI_PATH`).
+Writes 3 example contact cards to `./data/wiki/contacts/` (project-local by default; point `NEUROMCP_WIKI_PATH` at your real neuromcp wiki only when going live).
 
 ### Typecheck & test
 ```bash
