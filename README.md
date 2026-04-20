@@ -33,15 +33,44 @@ sees things worth deciding on.
 
 ---
 
-## Screenshots
+## What it looks like in practice
 
-**Live pipeline dashboard** — real events from a real Gmail inbox, 28 messages processed:
+**A live research moment.** An unknown sender's domain (`verdanthq.com`) turned out
+to be a parked HugeDomains listing. The Drafter didn't invent context — it scraped
+the domain, saw the parked page, and told the founder *in the draft itself*:
+
+> *"when I pulled up verdanthq.com it showed as a parked domain for sale, so I want
+> to make sure I have the right link before we go deeper."*
+
+The Evidence panel below the draft shows that claim cited back to the research
+snippet, verified by the Verifier before the founder ever sees it.
+
+<img src="docs/assets/telegram-partner-research-cited.png" width="420">
+
+---
+
+**Live pipeline dashboard** — real events from a real Gmail inbox:
 
 ![Pipeline Dashboard](docs/assets/dashboard.png)
 
-**Telegram approval card** — draft body with an evidence panel citing specific memory lines:
+---
 
-<img src="docs/assets/telegram-investor-card.png" width="420">
+**Cold investor reply** — 4 claims, each cited back to a line in the inbound email:
+
+<img src="docs/assets/telegram-investor-priya.png" width="420">
+
+---
+
+**Press inquiry** with research on the sender's publication:
+
+<img src="docs/assets/telegram-press-card.png" width="420">
+
+---
+
+**Injection guard + approval chain** — rejected adversarial email + approved Sarah
+and Daniel, all in one scroll:
+
+<img src="docs/assets/telegram-sent-and-blocked.png" width="420">
 
 ---
 
