@@ -8,6 +8,7 @@ import { verify } from "../src/agents/verifier.ts";
 import { plan } from "../src/agents/planner.ts";
 import { gate } from "../src/confidence/gate.ts";
 import { researchSender } from "../src/research/sender.ts";
+import { recordPipelineOutcome } from "../src/metrics/events.ts";
 import { GOLD } from "../src/fixtures/messages.ts";
 
 async function main(): Promise<void> {
@@ -54,6 +55,19 @@ async function main(): Promise<void> {
     const action = await plan(verified, intent, card);
     const decision = gate(action);
 
+    const elapsed = Date.now() - t0;
+    recordPipelineOutcome({
+      msg,
+      intent,
+      cardMatched: card !== null,
+      researchAttempted: research !== null,
+      researchUrls: research ? Object.keys(research.snippets).length : 0,
+      draft: verified,
+      plan: action,
+      decision,
+      elapsedMs: elapsed,
+    });
+
     switch (decision.type) {
       case "auto_send":
         autoSends += 1;
@@ -66,7 +80,6 @@ async function main(): Promise<void> {
         break;
     }
 
-    const elapsed = Date.now() - t0;
     const cardFlag = card ? "🗂️ " : "🆕";
     const verifFlag = verified.verifierPass
       ? "✓"

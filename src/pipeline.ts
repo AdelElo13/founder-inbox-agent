@@ -6,6 +6,7 @@ import { verify } from "./agents/verifier.ts";
 import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
 import { researchSender } from "./research/sender.ts";
+import { recordPipelineOutcome } from "./metrics/events.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
 import type { ResearchCard, UnifiedMessage } from "./types.ts";
 
@@ -66,6 +67,7 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
 
   const elapsed = Date.now() - started;
 
+  let telegramCardId: string | undefined;
   if (decision.type === "escalate" && telegramEnabled()) {
     try {
       const item = await surfaceForApproval({
@@ -78,17 +80,30 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
         draft: verified,
         plan: action,
       });
+      telegramCardId = item.id;
       console.log(
         `[pipeline] msg=${msg.id} intent=${intent.label} → escalate (telegram=${item.id}) elapsed_ms=${elapsed}`,
       );
-      return;
     } catch (err) {
       console.warn(`[pipeline] telegram surface failed for ${msg.id}:`, err);
     }
+  } else {
+    console.log(
+      `[pipeline] msg=${msg.id} intent=${intent.label} verified=${verified.verifierPass} ` +
+        `decision=${decision.type} elapsed_ms=${elapsed}`,
+    );
   }
 
-  console.log(
-    `[pipeline] msg=${msg.id} intent=${intent.label} verified=${verified.verifierPass} ` +
-      `decision=${decision.type} elapsed_ms=${elapsed}`,
-  );
+  recordPipelineOutcome({
+    msg,
+    intent,
+    cardMatched: card !== null,
+    researchAttempted: research !== null,
+    researchUrls: research ? Object.keys(research.snippets).length : 0,
+    draft: verified,
+    plan: action,
+    decision,
+    elapsedMs: elapsed,
+    ...(telegramCardId && { telegramCardId }),
+  });
 }

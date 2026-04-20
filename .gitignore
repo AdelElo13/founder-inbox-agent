@@ -10,3 +10,4 @@ metrics/
 
 # OS
 .DS_Store
+public/events.jsonl

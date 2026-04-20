@@ -18,6 +18,7 @@
     "label": "tsx scripts/label-messages.ts",
     "eval": "tsx scripts/eval-classifier.ts",
     "eval:pipeline": "tsx scripts/eval-pipeline.ts",
+    "dashboard": "tsx scripts/open-dashboard.ts",
     "test": "vitest run"
   },
   "dependencies": {

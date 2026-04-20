@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Founder Inbox — Pipeline Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --fg: #e8edf0;
+    --muted: #8590a0;
+    --panel: #13171c;
+    --border: #1d242c;
+    --accent: #5eead4;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif; }
+  main { max-width:1200px; margin:0 auto; padding:32px 24px; }
+  h1 { margin:0 0 4px; font-size:22px; font-weight:600; letter-spacing:-0.01em; }
+  .sub { color:var(--muted); margin-bottom:24px; font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:24px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .card h2 { margin:0 0 10px; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); font-weight:600; }
+  .big { font-size:28px; font-weight:600; letter-spacing:-0.02em; margin:0; font-variant-numeric:tabular-nums; }
+  .big .unit { font-size:14px; color:var(--muted); font-weight:400; margin-left:4px; }
+  .bar { display:flex; height:10px; border-radius:6px; overflow:hidden; background:var(--border); margin-top:10px; }
+  .bar > span { display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted); margin-top:8px; }
+  .legend > span { display:inline-flex; align-items:center; gap:5px; }
+  .dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
+  td { padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  td.num { font-variant-numeric:tabular-nums; text-align:right; color:var(--muted); }
+  .tag { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:500; }
+  .tag.investor { background:#3b2d0e; color:#fbbf24; }
+  .tag.customer { background:#0a2a3a; color:#38bdf8; }
+  .tag.partner { background:#1b2e1f; color:#4ade80; }
+  .tag.press { background:#2e1a2b; color:#f472b6; }
+  .tag.noise { background:#1d242c; color:var(--muted); }
+  .tag.unknown { background:#2a1a1a; color:#f87171; }
+  .tag.auto_send { background:#1a3c2a; color:var(--ok); }
+  .tag.escalate { background:#3a2c0c; color:var(--warn); }
+  .tag.drop { background:#1d242c; color:var(--muted); }
+  .ok { color:var(--ok); }
+  .fail { color:var(--danger); }
+  .empty { color:var(--muted); padding:40px 0; text-align:center; }
+  footer { color:var(--muted); font-size:12px; margin-top:32px; border-top:1px solid var(--border); padding-top:12px; }
+  code { background:var(--border); padding:1px 6px; border-radius:3px; font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Founder Inbox <span style="color:var(--muted);font-weight:400;">— Pipeline Dashboard</span></h1>
+  <div class="sub" id="sub">loading…</div>
+
+  <div class="grid" id="kpis"></div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <h2>Decision breakdown</h2>
+    <div class="bar" id="decision-bar"></div>
+    <div class="legend" id="decision-legend"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <h2>Intent distribution</h2>
+    <div class="bar" id="intent-bar"></div>
+    <div class="legend" id="intent-legend"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent events</h2>
+    <div id="events-table"></div>
+  </div>
+
+  <footer>
+    Reads <code>events.jsonl</code> next to this file. No server, no DB. Rerun your pipeline and reload to see fresh data.
+  </footer>
+</main>
+<script src="./dashboard.js"></script>
+</body>
+</html>
