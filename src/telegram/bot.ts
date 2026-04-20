@@ -122,6 +122,19 @@ async function handleApprove(id: string, ctx: Context): Promise<void> {
     await ctx.answerCbQuery("already handled");
     return;
   }
+  // Guard: no-reply addresses will fail at Gmail send — don't even try.
+  if (/no[\- ]?reply|noreply|donotreply/i.test(item.from.email)) {
+    updateStatus(id, {
+      status: "rejected",
+      resolvedAt: new Date().toISOString(),
+    });
+    await ctx.answerCbQuery("blocked: no-reply address");
+    await ctx.editMessageText(
+      `❌ Cannot reply to ${item.from.email} (no-reply). Marked rejected.`,
+    );
+    return;
+  }
+
   try {
     const bodyToSend = item.editedBody ?? item.draft.body;
     await sendReply({
@@ -131,6 +144,8 @@ async function handleApprove(id: string, ctx: Context): Promise<void> {
       subject: item.subject,
       body: bodyToSend,
     });
+    // Only mark approved AFTER the send succeeds — previously we flipped
+    // status first and a failing send left the queue in a lying state.
     updateStatus(id, {
       status: "approved",
       resolvedAt: new Date().toISOString(),

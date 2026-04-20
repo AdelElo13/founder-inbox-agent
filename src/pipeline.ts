@@ -8,9 +8,12 @@ import { gate } from "./confidence/gate.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
 import type { UnifiedMessage } from "./types.ts";
 
-const TELEGRAM_ENABLED = Boolean(
-  process.env["TELEGRAM_BOT_TOKEN"] && process.env["TELEGRAM_FOUNDER_CHAT_ID"],
-);
+function telegramEnabled(): boolean {
+  // Evaluated lazily — module-time check fires before index.ts loads dotenv.
+  return Boolean(
+    process.env["TELEGRAM_BOT_TOKEN"] && process.env["TELEGRAM_FOUNDER_CHAT_ID"],
+  );
+}
 
 export async function runOnce(): Promise<void> {
   const messages = await pollGmail();
@@ -19,9 +22,10 @@ export async function runOnce(): Promise<void> {
     return;
   }
 
+  const tgOn = telegramEnabled();
   console.log(
     `[pipeline] ${messages.length} message${messages.length === 1 ? "" : "s"} to process` +
-      (TELEGRAM_ENABLED ? " (Telegram ON)" : " (Telegram OFF — set TELEGRAM_BOT_TOKEN + TELEGRAM_FOUNDER_CHAT_ID)"),
+      (tgOn ? " (Telegram ON)" : " (Telegram OFF — set TELEGRAM_BOT_TOKEN + TELEGRAM_FOUNDER_CHAT_ID)"),
   );
 
   for (const msg of messages) {
@@ -54,7 +58,7 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
 
   const elapsed = Date.now() - started;
 
-  if (decision.type === "escalate" && TELEGRAM_ENABLED) {
+  if (decision.type === "escalate" && telegramEnabled()) {
     try {
       const item = await surfaceForApproval({
         id: `${msg.id}-${started}`,
