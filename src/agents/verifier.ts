@@ -1,15 +1,116 @@
 import type {
+  Citation,
   DraftWithEvidence,
+  EvidenceClaim,
   RelationshipCard,
   UnifiedMessage,
 } from "../types.ts";
 
+/**
+ * The Verifier has veto. It checks every factual claim in a draft and
+ * ensures the citations refer to real entries in the card / inbound message.
+ *
+ * Rules (strict):
+ *  1. Empty draft body → reject (drafter bailed out).
+ *  2. Any claim with empty cites[] → reject.
+ *  3. Any claim whose cites all fail resolution → reject.
+ *  4. textRange out of bounds → reject.
+ *  5. Citation excerpt must plausibly appear (case-insensitive substring) in
+ *     the cited source — protects against fabricated excerpts where the refId
+ *     is real but the excerpt is invented.
+ *
+ * On pass: verifierPass=true, verifierNotes omitted.
+ * On fail: verifierPass=false, verifierNotes lists the specific rule that
+ * broke and which claim caused it — the caller can use this to decide
+ * whether to regenerate with stricter prompt or escalate as-is.
+ */
 export async function verify(
   draft: DraftWithEvidence,
-  _card: RelationshipCard | null,
-  _msg: UnifiedMessage,
+  card: RelationshipCard | null,
+  msg: UnifiedMessage,
 ): Promise<DraftWithEvidence> {
-  // Day 1 TODO: reject drafts where any claim's cites[] is empty or refs don't exist.
-  // Return { ...draft, verifierPass: true/false, verifierNotes }.
-  return { ...draft, verifierPass: false, verifierNotes: "verifier: not implemented" };
+  if (draft.body.trim().length === 0) {
+    return { ...draft, verifierPass: false, verifierNotes: "empty body" };
+  }
+
+  for (let i = 0; i < draft.claims.length; i += 1) {
+    const claim = draft.claims[i];
+    if (!claim) continue;
+
+    const bodyLen = draft.body.length;
+    const [start, end] = claim.textRange;
+    if (start < 0 || end > bodyLen || start > end) {
+      return {
+        ...draft,
+        verifierPass: false,
+        verifierNotes: `claim #${i}: textRange [${start},${end}] out of bounds (body len ${bodyLen})`,
+      };
+    }
+
+    if (claim.cites.length === 0) {
+      return {
+        ...draft,
+        verifierPass: false,
+        verifierNotes: `claim #${i} has empty cites[]`,
+      };
+    }
+
+    const resolved = claim.cites.some((c) => resolveCitation(c, card, msg));
+    if (!resolved) {
+      return {
+        ...draft,
+        verifierPass: false,
+        verifierNotes: `claim #${i}: none of ${claim.cites.length} citations resolved to card/msg`,
+      };
+    }
+  }
+
+  return { ...draft, verifierPass: true };
+}
+
+function resolveCitation(
+  cite: Citation,
+  card: RelationshipCard | null,
+  msg: UnifiedMessage,
+): boolean {
+  const excerpt = cite.excerpt.trim().toLowerCase();
+  if (!excerpt) return false;
+
+  if (cite.source === "inbound_message") {
+    const haystack = `${msg.subject} ${msg.body}`.toLowerCase();
+    return haystack.includes(excerpt.slice(0, 120));
+  }
+
+  if (!card) return false;
+
+  if (cite.source === "interaction") {
+    const it = card.interactions.find((i) => i.id === cite.refId);
+    if (!it) return false;
+    return it.summary.toLowerCase().includes(excerpt.slice(0, 120));
+  }
+
+  if (cite.source === "ask") {
+    const ask = card.openAsks.find((a) => a.id === cite.refId);
+    if (!ask) return false;
+    return ask.request.toLowerCase().includes(excerpt.slice(0, 120));
+  }
+
+  if (cite.source === "context") {
+    return card.contexts.some((ctx) => {
+      if (ctx.evidenceIds.includes(cite.refId)) return true;
+      const blob = [ctx.role, ctx.company ?? ""].join(" ").toLowerCase();
+      return blob.includes(excerpt.slice(0, 80));
+    });
+  }
+
+  return false;
+}
+
+/** Exposed for tests — same predicate the verify() loop uses. */
+export function claimResolvable(
+  claim: EvidenceClaim,
+  card: RelationshipCard | null,
+  msg: UnifiedMessage,
+): boolean {
+  return claim.cites.some((c) => resolveCitation(c, card, msg));
 }

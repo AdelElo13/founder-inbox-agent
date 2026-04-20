@@ -10,6 +10,18 @@ export function gate(plan: ActionPlan): GateDecision {
     return { type: "drop", reason: "empty plan" };
   }
 
+  const [first] = plan.steps;
+  if (!first) {
+    return { type: "drop", reason: "empty plan" };
+  }
+
+  // Archive is a safe auto-action regardless of confidence — the planner has
+  // already decided nothing of value will be sent. Keeps noise from clogging
+  // the approval queue.
+  if (first.type === "archive") {
+    return { type: "drop", reason: first.reason };
+  }
+
   if (HIGH_STAKES.has(plan.intent)) {
     return {
       type: "escalate",
@@ -26,9 +38,5 @@ export function gate(plan: ActionPlan): GateDecision {
     };
   }
 
-  const [first] = plan.steps;
-  if (!first) {
-    return { type: "drop", reason: "empty plan" };
-  }
   return { type: "auto_send", action: first };
 }
