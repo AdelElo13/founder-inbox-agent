@@ -13,6 +13,7 @@
     "start": "node --import tsx src/index.ts",
     "daemon": "node --import tsx src/index.ts --watch",
     "auth": "tsx scripts/gmail-auth.ts",
+    "setup": "tsx scripts/setup.ts",
     "telegram": "tsx scripts/telegram-poll.ts",
     "replay": "tsx scripts/replay-last.ts",
     "seed:inbox": "tsx scripts/seed-inbox.ts",
