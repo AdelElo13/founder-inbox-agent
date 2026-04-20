@@ -1,4 +1,5 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+loadEnv({ override: true });
 import { authorizeInteractive } from "../src/gmail/auth.ts";
 import { ensureLabels } from "../src/gmail/labels.ts";
 import { google } from "googleapis";

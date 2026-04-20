@@ -1,4 +1,5 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+loadEnv({ override: true });
 import { writeCard } from "../src/memory/card-store.ts";
 import type { RelationshipCard } from "../src/types.ts";
 

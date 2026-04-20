@@ -88,7 +88,14 @@ export async function classify(
     return fallback(msg, `schema mismatch: ${validated.error.message}`);
   }
 
-  return validated.data;
+  // Zod output field is `intent` (matches LLM JSON); interface uses `label`.
+  return {
+    label: validated.data.intent,
+    urgency: validated.data.urgency,
+    risk: validated.data.risk,
+    confidence: validated.data.confidence,
+    reasoning: validated.data.reasoning,
+  };
 }
 
 function renderMessageForClassification(msg: UnifiedMessage): string {

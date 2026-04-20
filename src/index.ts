@@ -1,4 +1,5 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+loadEnv({ override: true });
 import { runOnce } from "./pipeline.ts";
 
 async function main(): Promise<void> {
