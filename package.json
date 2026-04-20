@@ -9,8 +9,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "dev": "tsx --watch src/index.ts",
+    "dev": "tsx --watch src/index.ts --watch",
     "start": "node --import tsx src/index.ts",
+    "daemon": "node --import tsx src/index.ts --watch",
     "auth": "tsx scripts/gmail-auth.ts",
     "telegram": "tsx scripts/telegram-poll.ts",
     "replay": "tsx scripts/replay-last.ts",
