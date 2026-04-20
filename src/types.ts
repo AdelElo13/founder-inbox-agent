@@ -82,7 +82,13 @@ export interface Citation {
 }
 
 export interface EvidenceClaim {
-  textRange: [number, number];
+  /**
+   * A verbatim substring of the draft body that represents the factual claim.
+   * Verifier does a case-insensitive `body.includes(textMatch)` check.
+   * Robust across LLM char-offset mistakes — previous `textRange: [number, number]`
+   * shape caused 3/10 false rejections due to off-by-N counting errors.
+   */
+  textMatch: string;
   cites: Citation[];
 }
 

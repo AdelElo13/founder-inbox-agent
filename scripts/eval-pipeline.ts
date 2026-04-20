@@ -18,7 +18,7 @@ async function main(): Promise<void> {
 
   console.log(`[pipeline] running on ${GOLD.length} fixture messages`);
   console.log(
-    `[pipeline] model: ${process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-5"}`,
+    `[pipeline] model: ${process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-7"}`,
   );
   console.log("");
 

@@ -8,7 +8,7 @@ import type {
   UnifiedMessage,
 } from "../types.ts";
 
-const MODEL = process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-5";
+const MODEL = process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-7";
 
 const CitationSchema = z.object({
   source: z.enum(["interaction", "inbound_message", "context", "ask"]),
@@ -17,7 +17,7 @@ const CitationSchema = z.object({
 });
 
 const ClaimSchema = z.object({
-  textRange: z.tuple([z.number().int().min(0), z.number().int().min(0)]),
+  textMatch: z.string().min(3).max(300),
   cites: z.array(CitationSchema).min(1),
 });
 
@@ -45,7 +45,10 @@ OUTPUT: JSON object (no prose outside JSON, no code fences) with:
 
 Each claim:
 {
-  "textRange": [start, end],  // char offsets into "body" covering the claim
+  "textMatch": string,        // a VERBATIM substring of "body" (3-300 chars) that
+                              // represents the factual statement — e.g. "we met at
+                              // Paris AI Summit" — must appear character-for-character
+                              // in body (case-sensitive). The Verifier checks this.
   "cites": [                  // MUST have at least one citation
     {
       "source": "interaction" | "inbound_message" | "context" | "ask",
@@ -65,7 +68,9 @@ RULES:
    share private metrics, investor lists, customer names, or financials.
 5. If you cannot ground a claim, do not make it. A shorter honest draft beats
    a longer hallucinated one. Drop to 2-3 sentences if needed.
-6. textRange must be exact char offsets — [0, 10] covers body[0..10].
+6. textMatch MUST be a verbatim substring of the body you wrote. Copy the
+   phrase exactly. The Verifier does body.includes(textMatch) and rejects on
+   miss. If you rewrite the body, update the textMatch too.
 7. confidence: 0.95 when the card is rich and the ask is clear; 0.5-0.7 when
    the card is thin or the intent is ambiguous; below 0.5 when you feel unsure.
 
@@ -92,7 +97,7 @@ export async function draft(
   const response = await client.messages.create({
     model,
     max_tokens: 1200,
-    temperature: 0.2,
+    // Opus 4.7+ deprecated the `temperature` parameter.
     system: SYSTEM,
     messages: [{ role: "user", content: userBlock }],
   });
@@ -107,7 +112,7 @@ export async function draft(
   }
 
   const claims: EvidenceClaim[] = validated.data.claims.map((c) => ({
-    textRange: [c.textRange[0], c.textRange[1]],
+    textMatch: c.textMatch,
     cites: c.cites,
   }));
 

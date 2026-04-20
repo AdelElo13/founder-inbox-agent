@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { IntentResult, UnifiedMessage } from "../types.ts";
 
-const MODEL = process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-5";
+const MODEL = process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-7";
 
 const SYSTEM = `You classify incoming founder-inbox messages into one of six intents.
 
@@ -74,7 +74,10 @@ export async function classify(
   const response = await client.messages.create({
     model,
     max_tokens: 300,
-    temperature: 0,
+    // Opus 4.7+ deprecated the `temperature` parameter — its internal
+    // reasoning loop picks appropriate sampling itself. Omitting leaves
+    // older models at their default (1.0), which is fine given our
+    // strict JSON schema clamps the surface.
     system: SYSTEM,
     messages: [{ role: "user", content: userBlock }],
   });

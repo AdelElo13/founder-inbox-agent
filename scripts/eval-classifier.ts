@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   const rows: Row[] = [];
 
   console.log(`[eval] running classifier on ${GOLD.length} labeled messages`);
-  console.log(`[eval] model: ${process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-5 (default)"}`);
+  console.log(`[eval] model: ${process.env["ANTHROPIC_MODEL"] ?? "claude-opus-4-7 (default)"}`);
   console.log("");
 
   for (const { msg, expected } of GOLD) {

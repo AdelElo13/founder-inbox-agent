@@ -14,7 +14,9 @@ import type {
  *  1. Empty draft body → reject (drafter bailed out).
  *  2. Any claim with empty cites[] → reject.
  *  3. Any claim whose cites all fail resolution → reject.
- *  4. textRange out of bounds → reject.
+ *  4. textMatch must appear as a case-insensitive substring of the body —
+ *     protects against LLM quoting phrases it claims are in the body but
+ *     actually aren't (means the claim drifted during generation).
  *  5. Citation excerpt must plausibly appear (case-insensitive substring) in
  *     the cited source — protects against fabricated excerpts where the refId
  *     is real but the excerpt is invented.
@@ -33,17 +35,26 @@ export async function verify(
     return { ...draft, verifierPass: false, verifierNotes: "empty body" };
   }
 
+  const bodyLower = draft.body.toLowerCase();
+
   for (let i = 0; i < draft.claims.length; i += 1) {
     const claim = draft.claims[i];
     if (!claim) continue;
 
-    const bodyLen = draft.body.length;
-    const [start, end] = claim.textRange;
-    if (start < 0 || end > bodyLen || start > end) {
+    const textMatch = claim.textMatch.trim().toLowerCase();
+    if (textMatch.length < 3) {
       return {
         ...draft,
         verifierPass: false,
-        verifierNotes: `claim #${i}: textRange [${start},${end}] out of bounds (body len ${bodyLen})`,
+        verifierNotes: `claim #${i}: textMatch too short ("${claim.textMatch}")`,
+      };
+    }
+
+    if (!bodyLower.includes(textMatch)) {
+      return {
+        ...draft,
+        verifierPass: false,
+        verifierNotes: `claim #${i}: textMatch not found in body ("${claim.textMatch.slice(0, 60)}")`,
       };
     }
 
