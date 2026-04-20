@@ -1,8 +1,21 @@
 import { Context, Markup, Telegraf } from "telegraf";
+import { message } from "telegraf/filters";
 import { sendReply } from "../gmail/sender.ts";
+import { recordInteractionFromApproval } from "../memory/learn.ts";
 import { enqueue, findById, listPending, updateStatus } from "./queue.ts";
 import { renderApprovalCard } from "./format.ts";
 import type { ApprovalItem } from "./types.ts";
+
+/**
+ * When the founder taps "Edit" on an approval card, we record the card id
+ * here keyed by their chat id. The next plain-text message they send becomes
+ * the revised body for that card — we send it, update the queue, clear the
+ * pending edit.
+ *
+ * Lives in-process (not persisted): edit prompts expire when the bot
+ * restarts, which is fine — the founder just taps Edit again.
+ */
+const pendingEditByChat = new Map<number, string>();
 
 const APPROVAL_TTL_MS = 30 * 60 * 1000; // 30 min before an item is considered stale
 
@@ -71,6 +84,48 @@ export function getBot(): Telegraf {
     const id = ctx.match[1];
     if (!id) return;
     await handleEdit(id, ctx);
+  });
+
+  // Plain-text message handler — correlates the founder's next message with
+  // the most recently Edit-tapped card and sends it as the revised body.
+  bot.on(message("text"), async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const pendingId = pendingEditByChat.get(chatId);
+    if (!pendingId) return; // Not in edit mode — ignore plain text.
+
+    const item = findById(pendingId);
+    if (!item || item.status !== "pending") {
+      pendingEditByChat.delete(chatId);
+      await ctx.reply("That approval is no longer pending. Cancelled.");
+      return;
+    }
+
+    const newBody = ctx.message.text.trim();
+    if (newBody.length < 10) {
+      await ctx.reply("Body too short. Send the full revised reply.");
+      return;
+    }
+
+    try {
+      await sendReply({
+        threadId: item.gmailThreadId,
+        inReplyToMessageId: item.gmailMessageId,
+        to: item.from.email,
+        subject: item.subject,
+        body: newBody,
+      });
+      updateStatus(pendingId, {
+        status: "edited",
+        resolvedAt: new Date().toISOString(),
+        editedBody: newBody,
+      });
+      await recordInteractionFromApproval(item, "edited", newBody);
+      pendingEditByChat.delete(chatId);
+      await ctx.reply(`✅ Edited reply sent to ${item.from.name}.`);
+    } catch (err) {
+      await ctx.reply(`❌ Send failed: ${String(err).slice(0, 200)}`);
+    }
   });
 
   botSingleton = bot;
@@ -150,6 +205,9 @@ async function handleApprove(id: string, ctx: Context): Promise<void> {
       status: "approved",
       resolvedAt: new Date().toISOString(),
     });
+    // Memory learns: record this outbound as a fresh interaction on the
+    // sender's RelationshipCard so future drafts can cite "we replied about X".
+    await recordInteractionFromApproval(item, "approved", bodyToSend);
     await ctx.answerCbQuery("sent ✓");
     await ctx.editMessageText(
       `✅ Sent to ${item.from.name} at ${new Date().toLocaleTimeString()}`,
@@ -177,11 +235,15 @@ async function handleReject(id: string, ctx: Context): Promise<void> {
 }
 
 async function handleEdit(id: string, ctx: Context): Promise<void> {
+  const chatId = ctx.chat?.id;
+  if (!chatId) {
+    await ctx.answerCbQuery("no chat context");
+    return;
+  }
+  pendingEditByChat.set(chatId, id);
   await ctx.answerCbQuery("reply with the edited body");
   await ctx.reply(
-    `Reply to this message with the revised body for approval item ${id}. ` +
-      `Your next message will be used verbatim as the email.`,
+    "✏️ Reply to THIS message with the revised body. " +
+      "Your next message will be sent verbatim as the reply.",
   );
-  // TODO (Day 3): correlate the next text message from admin with this id
-  // via a pending-edit map, then sendReply with the new body.
 }
