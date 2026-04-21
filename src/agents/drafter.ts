@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { DEFAULT_IDENTITY, renderIdentityForPrompt } from "../identity/founder.ts";
 import type {
   DraftWithEvidence,
   EvidenceClaim,
@@ -137,8 +138,11 @@ function renderContext(
     ? renderCard(card)
     : "CARD: NEW_CONTACT (no prior memory)";
   const researchBlock = research ? renderResearch(research) : "";
+  const identityBlock = renderIdentityForPrompt(DEFAULT_IDENTITY);
 
   return [
+    identityBlock,
+    ``,
     `INTENT: ${intent.label} (urgency=${intent.urgency}, risk=${intent.risk}, confidence=${intent.confidence.toFixed(2)})`,
     `CLASSIFIER_REASONING: ${intent.reasoning}`,
     ``,

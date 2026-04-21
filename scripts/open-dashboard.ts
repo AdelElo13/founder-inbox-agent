@@ -75,9 +75,15 @@ const server = createServer((req, res) => {
   res.end(readFileSync(abs));
 });
 
-server.listen(PORT, () => {
-  const url = `http://localhost:${PORT}`;
-  console.log(`[dashboard] serving ${PUBLIC_DIR} at ${url}`);
+// Bind explicitly to 127.0.0.1 (loopback only) — never 0.0.0.0. The dashboard
+// reads events.jsonl which now contains inbound email previews, drafted
+// replies, and cited excerpts. A stray listen-all would expose that to any
+// device on the LAN. If you need remote access, tunnel it (ssh -L / Tailscale).
+const HOST = "127.0.0.1";
+
+server.listen(PORT, HOST, () => {
+  const url = `http://${HOST}:${PORT}`;
+  console.log(`[dashboard] serving ${PUBLIC_DIR} at ${url} (loopback only)`);
   console.log(`[dashboard] press Ctrl+C to stop`);
   spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
 });

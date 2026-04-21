@@ -1,3 +1,4 @@
+import { DEFAULT_IDENTITY, whyDraftedFor } from "../identity/founder.ts";
 import type { ApprovalItem } from "./types.ts";
 
 /**
@@ -36,6 +37,7 @@ export function renderApprovalCard(item: ApprovalItem): string {
   }
 
   lines.push("");
+  lines.push(`_Why drafted:_ ${escape(whyDraftedFor(DEFAULT_IDENTITY, plan.intent))}`);
   lines.push(
     `_Confidence:_ ${draft.confidence.toFixed(2)}  _Verifier:_ ${draft.verifierPass ? "✓" : "✗"}`,
   );

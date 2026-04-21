@@ -4,9 +4,10 @@ dist/
 .env.local
 *.log
 
-# Local data (memory, eval fixtures, metrics)
-data/
-metrics/
+# Local data (memory, eval fixtures, runtime metrics output)
+# Anchored to the root so src/metrics/ (source code) stays tracked.
+/data/
+/metrics/
 
 # OS
 .DS_Store

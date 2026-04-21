@@ -1,5 +1,6 @@
 import { Context, Markup, Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
+import { markMessageTerminal } from "../gmail/lifecycle.ts";
 import { sendReply } from "../gmail/sender.ts";
 import { recordInteractionFromApproval } from "../memory/learn.ts";
 import { enqueue, findById, listPending, updateStatus } from "./queue.ts";
@@ -183,6 +184,7 @@ async function handleApprove(id: string, ctx: Context): Promise<void> {
       status: "rejected",
       resolvedAt: new Date().toISOString(),
     });
+    await markMessageTerminal(item.gmailMessageId, "rejected");
     await ctx.answerCbQuery("blocked: no-reply address");
     await ctx.editMessageText(
       `❌ Cannot reply to ${item.from.email} (no-reply). Marked rejected.`,
@@ -228,6 +230,10 @@ async function handleReject(id: string, ctx: Context): Promise<void> {
     status: "rejected",
     resolvedAt: new Date().toISOString(),
   });
+  // Close the label loop — Gmail gets -QUEUED +PROCESSED +REJECTED so the
+  // message no longer looks pending. Do it after updateStatus because the
+  // queue is the source of truth for the UI; label write is best-effort.
+  await markMessageTerminal(item.gmailMessageId, "rejected");
   await ctx.answerCbQuery("rejected");
   await ctx.editMessageText(
     `❌ Rejected — ${item.from.name}: ${item.subject}`,

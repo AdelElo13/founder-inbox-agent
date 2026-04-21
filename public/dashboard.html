@@ -34,6 +34,8 @@
   table { width:100%; border-collapse:collapse; font-size:12.5px; }
   th { text-align:left; color:var(--muted); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:0.04em; }
   td { padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tr.row { cursor:pointer; transition:background 0.08s ease; }
+  tr.row:hover { background:rgba(94,234,212,0.04); }
   td.num { font-variant-numeric:tabular-nums; text-align:right; color:var(--muted); }
   .tag { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:500; }
   .tag.investor { background:#3b2d0e; color:#fbbf24; }
@@ -50,6 +52,44 @@
   .empty { color:var(--muted); padding:40px 0; text-align:center; }
   footer { color:var(--muted); font-size:12px; margin-top:32px; border-top:1px solid var(--border); padding-top:12px; }
   code { background:var(--border); padding:1px 6px; border-radius:3px; font-size:12px; }
+
+  /* filters */
+  .filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:16px; }
+  .filters-group { display:flex; gap:6px; flex-wrap:wrap; }
+  .filters-label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin-right:4px; }
+  .chip { cursor:pointer; padding:4px 10px; border:1px solid var(--border); border-radius:14px; font-size:12px; color:var(--muted); background:transparent; user-select:none; transition:all 0.1s ease; }
+  .chip:hover { border-color:#2a3540; color:var(--fg); }
+  .chip.active { background:var(--border); color:var(--fg); border-color:#2a3540; }
+  .chip .count { color:var(--muted); font-size:11px; margin-left:4px; font-variant-numeric:tabular-nums; }
+  .chip.active .count { color:var(--muted); }
+  .search { flex:1; min-width:200px; background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--fg); font:inherit; font-size:12.5px; }
+  .search:focus { outline:none; border-color:var(--accent); }
+  .reset { cursor:pointer; color:var(--muted); font-size:12px; background:none; border:none; padding:6px 8px; text-decoration:underline; }
+  .reset:hover { color:var(--fg); }
+  .flag { display:inline-block; margin-left:6px; font-size:11px; color:var(--danger); }
+
+  /* modal */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.72); display:none; align-items:flex-start; justify-content:center; padding:40px 24px; overflow-y:auto; z-index:100; }
+  .modal-backdrop.open { display:flex; }
+  .modal { background:var(--panel); border:1px solid var(--border); border-radius:10px; width:100%; max-width:820px; padding:22px 26px 26px; position:relative; }
+  .modal-close { position:absolute; top:12px; right:16px; background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:4px 8px; border-radius:4px; }
+  .modal-close:hover { color:var(--fg); background:var(--border); }
+  .modal-head { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .modal-subject { font-size:16px; font-weight:600; margin:4px 0 2px; line-height:1.35; }
+  .modal-meta { color:var(--muted); font-size:12.5px; margin-bottom:18px; display:flex; flex-wrap:wrap; gap:14px; }
+  .modal-meta .sep { color:var(--border); }
+  .section { margin-bottom:18px; }
+  .section-title { font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); font-weight:600; margin-bottom:6px; }
+  .section-body { background:#0f1318; border:1px solid var(--border); border-radius:6px; padding:10px 12px; font-size:13px; white-space:pre-wrap; line-height:1.5; }
+  .section-body.muted { color:var(--muted); font-style:italic; }
+  .claim { border-left:2px solid var(--accent); padding:6px 10px 6px 12px; margin-bottom:8px; background:#0f1318; border-radius:0 6px 6px 0; }
+  .claim-match { font-size:12.5px; margin-bottom:4px; }
+  .claim-match strong { color:var(--accent); font-weight:500; }
+  .claim-cite { font-size:11.5px; color:var(--muted); margin-top:2px; padding-left:8px; border-left:1px solid var(--border); }
+  .claim-cite b { color:#8fe1d0; font-weight:500; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:12.5px; margin-bottom:6px; }
+  .kv dt { color:var(--muted); }
+  .kv dd { margin:0; }
 </style>
 </head>
 <body>
@@ -72,14 +112,28 @@
   </div>
 
   <div class="card">
-    <h2>Recent events</h2>
+    <h2>Recent events <span style="color:var(--muted);font-weight:400;">— click a row for full drill-down</span></h2>
+    <div class="filters">
+      <div class="filters-group" id="intent-chips"></div>
+      <div class="filters-group" id="decision-chips"></div>
+      <input class="search" id="search" type="search" placeholder="Search subject, from, reasoning…" autocomplete="off">
+      <button class="reset" id="reset">reset</button>
+    </div>
     <div id="events-table"></div>
   </div>
 
   <footer>
-    Reads <code>events.jsonl</code> next to this file. No server, no DB. Rerun your pipeline and reload to see fresh data.
+    Reads <code>events.jsonl</code>. No server, no DB. Polls every 5s — rerun your pipeline and watch new rows appear.
   </footer>
 </main>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal" role="dialog" aria-labelledby="modal-subject">
+    <button class="modal-close" id="modal-close" aria-label="Close">×</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
 <script src="./dashboard.js"></script>
 </body>
 </html>

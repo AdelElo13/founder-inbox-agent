@@ -6,6 +6,7 @@ import { verify } from "./agents/verifier.ts";
 import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
 import { researchSender } from "./research/sender.ts";
+import { markMessageTerminal } from "./gmail/lifecycle.ts";
 import { recordPipelineOutcome } from "./metrics/events.ts";
 import { scanForInjection } from "./security/injection.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
@@ -88,8 +89,13 @@ async function handleFlagged(
     plan,
     decision,
     elapsedMs: elapsed,
+    injectionFlagged: true,
     ...(telegramCardId && { telegramCardId }),
   });
+
+  // Mark the Gmail message as blocked — keeps QUEUED (still awaiting
+  // founder decision) but adds ESCALATED for visibility in Gmail.
+  await markMessageTerminal(msg.id, "blocked");
 }
 
 function telegramEnabled(): boolean {
@@ -199,4 +205,14 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
     elapsedMs: elapsed,
     ...(telegramCardId && { telegramCardId }),
   });
+
+  // Close the label loop so INBOX_AGENT_QUEUED never dangles:
+  //   drop     → move to PROCESSED (noise is terminal for us)
+  //   escalate → keep QUEUED, add ESCALATED marker so the founder can filter
+  //   auto_send→ sender.ts already flips -QUEUED +PROCESSED +SENT on success
+  if (decision.type === "drop") {
+    await markMessageTerminal(msg.id, "dropped");
+  } else if (decision.type === "escalate") {
+    await markMessageTerminal(msg.id, "escalated");
+  }
 }

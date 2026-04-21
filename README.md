@@ -6,6 +6,11 @@
 
 Built for **Cerebral Valley × Anthropic "Built with Opus 4.7" hackathon** (Apr 21–26, 2026).
 
+Not a demo — a **fully working product**. One-command setup (`pnpm setup` runs six
+green-light pre-flight checks). Background daemon polls Gmail every 30s. Evidence-grounded
+drafts land on your Telegram for one-tap approval. Live on the author's own Gmail inbox
+since day 2.
+
 ---
 
 ## The problem
@@ -31,6 +36,21 @@ Founder Inbox runs locally on your Mac. For every message:
 Investors and press always require approval. Pure noise is archived. The founder only
 sees things worth deciding on.
 
+## Shipped features
+
+| # | Feature | What it does |
+|---|---------|--------------|
+| 1 | **Background daemon** (`pnpm daemon`) | Gmail polling every 30s, SIGINT-clean shutdown, error backoff, heartbeat logging. Survives crashes via Gmail's own label system — no state file to corrupt. |
+| 2 | **Pre-flight setup wizard** (`pnpm setup`) | Six live checks (Anthropic · Gmail OAuth · Gmail API · labels · Telegram · welcome card). Green = ready to go. Red = explicit fix hint. No docs needed to ship. |
+| 3 | **Founder identity priors** (`src/identity/founder.ts`) | Structured quarter priorities (raising / hiring / selling / partnerships / press) + voice + hard rules feed into every draft. Every approval card shows a "Why drafted" line tying the reply back to the founder's declared posture. |
+| 4 | **Evidence-grounded drafts with Verifier veto** | `textMatch`/`cites` pairs on every claim. Verifier rejects any claim that can't be traced to memory / inbound / research. Three regen failures escalate the raw email. |
+| 5 | **Public-signal research** for unknown senders | Homepage + `/about` + `/team` + signature URLs scraped per unknown sender. Snippets cited by id inside the draft. |
+| 6 | **Telegram approval UX** — Approve / Reject / Edit | One tap to send. Edit: bot captures your next text message and sends it verbatim. No typing inside a webapp. |
+| 7 | **Memory learns after approval** | Every approve/edit appends a new `Interaction` to the sender's card (or seeds a card if they were a new contact). Future drafts cite "we replied about X on Y". |
+| 8 | **Prompt-injection guard** | 8 regex patterns (ignore-previous, system-prompt-exfiltration, role-override, …). Flagged messages skip the LLM entirely, get a 🛡 BLOCKED card with the raw email and the reason. |
+| 9 | **Interactive dashboard** at `localhost:4321` | KPIs, decision/intent breakdown, filter chips (intent + decision) with counts, full-text search, and a click-through modal showing classifier reasoning, inbound preview, draft body, every cited claim, and the Telegram card id. |
+| 10 | **Gmail label lifecycle as idempotency** | `QUEUED → PROCESSED (+SENT \| +REJECTED)` with `ESCALATED` marker for pending items. Every terminal decision closes the loop, so restart = no duplicates and no dangling QUEUED labels. Covered by unit tests. |
+
 ---
 
 ## What it looks like in practice
@@ -49,9 +69,16 @@ snippet, verified by the Verifier before the founder ever sees it.
 
 ---
 
-**Live pipeline dashboard** — real events from a real Gmail inbox:
+**Interactive pipeline dashboard** — filter by intent + decision, search subject/from,
+click any row to drill into the full draft + every cited claim:
 
-![Pipeline Dashboard](docs/assets/dashboard.png)
+![Pipeline Dashboard](docs/assets/dashboard-interactive.png)
+
+Clicking a row opens a modal with classifier reasoning, the inbound preview, the drafted
+reply, every claim cited back to its source, and the Telegram card id if escalated —
+so you can correlate a dashboard row with the exact approval card that appeared on your phone.
+
+![Drill-down modal](docs/assets/dashboard-modal.png)
 
 ---
 
@@ -150,15 +177,17 @@ pnpm install
 cp .env.example .env
 # Fill in ANTHROPIC_API_KEY, GOOGLE_CLIENT_*, TELEGRAM_*
 pnpm auth            # one-time OAuth flow for Gmail
+pnpm setup           # 6 pre-flight checks — all green = ready
 ```
 See **"Gmail OAuth setup"** below for the 5-minute Google Cloud Console walkthrough.
 
 ### Run
 ```bash
-pnpm telegram        # Terminal 1: bot polling loop (long-running)
-pnpm start           # Terminal 2: one-shot Gmail poll + process
-pnpm dashboard       # Terminal 3: metrics dashboard at http://localhost:4321
+pnpm telegram        # Terminal 1: bot long-poll loop (receives approve/reject/edit)
+pnpm daemon          # Terminal 2: Gmail poll every 30s, SIGINT-clean, auto-backoff
+pnpm dashboard       # Terminal 3: interactive metrics at http://localhost:4321
 ```
+Or for a one-shot dry run without the daemon: `pnpm start`.
 
 ### Demo seeding (no real senders needed)
 ```bash
@@ -170,11 +199,23 @@ pnpm start           # watch the pipeline handle them live
 
 ### Quality gates
 ```bash
-pnpm typecheck       # strict TypeScript
-pnpm test            # 18 unit tests (Vitest)
+pnpm typecheck       # strict TypeScript (noUncheckedIndexedAccess, exactOptionalPropertyTypes)
+pnpm test            # 25 unit tests (Vitest) — card store, normalizer, research, injection, label lifecycle
 pnpm eval            # classifier eval on labeled fixture
 pnpm eval:pipeline   # full pipeline eval on 10-message fixture
 ```
+
+### Privacy model
+
+The dashboard event log (`metrics/events.jsonl`) now includes inbound email
+previews, drafted replies, and cited excerpts so rows can be drilled into from
+the UI. This is **plaintext local data** — no encryption, no redaction.
+
+- The dashboard server binds to `127.0.0.1` (loopback) by design. Do not
+  override to `0.0.0.0` without a reason.
+- `metrics/` is in `.gitignore` and never leaves the machine.
+- If you're running this on a shared host or want remote access, tunnel it
+  (`ssh -L 4321:127.0.0.1:4321 …` or Tailscale) rather than loosening the bind.
 
 ---
 
@@ -201,18 +242,21 @@ pnpm eval:pipeline   # full pipeline eval on 10-message fixture
 src/
 ├── agents/          # classifier / memory / drafter / verifier / planner
 ├── confidence/      # gate policy
-├── gmail/           # OAuth, poller, sender, labels, normalize
-├── memory/          # contact-card CRUD on neuromcp wiki
+├── gmail/           # OAuth, poller, sender, labels, normalize, lifecycle
+├── identity/        # founder priorities/voice/rules (drafter priors)
+├── memory/          # contact-card CRUD + learn-from-approval
 ├── research/        # public-signal fetcher for unknown senders
 ├── security/        # prompt-injection guard
-├── telegram/        # approval bot + queue
-├── metrics/         # jsonl event log
+├── telegram/        # approval bot + queue + edit flow
+├── metrics/         # jsonl event log (with drill-down payload)
 ├── fixtures/        # 10 gold-labeled demo messages
+├── daemon.ts        # background poll loop (SIGINT-clean, error backoff)
 ├── pipeline.ts      # orchestrator
 ├── types.ts         # shared types
-└── index.ts         # CLI entry
+└── index.ts         # CLI entry (--watch = daemon mode)
 scripts/
 ├── gmail-auth.ts       # one-time OAuth
+├── setup.ts            # 6 pre-flight checks + welcome card
 ├── seed-fixtures.ts    # plant sample RelationshipCards
 ├── seed-inbox.ts       # plant 3 demo emails into Gmail
 ├── replay-last.ts      # un-label N recent messages for demos
@@ -221,8 +265,8 @@ scripts/
 ├── telegram-poll.ts    # bot long-poll runner
 └── open-dashboard.ts   # metrics server at localhost:4321
 public/
-├── dashboard.html      # static dashboard shell
-└── dashboard.js        # live-updates from events.jsonl
+├── dashboard.html      # interactive dashboard shell (filter chips, search, modal)
+└── dashboard.js        # live updates every 5s, click-to-drill-down on any event
 docs/
 ├── DESIGN_v2.md        # approved architecture (Codex 8.9/10, Gemini 9.0/10)
 ├── REVIEWS.md          # adversarial reviews
@@ -261,10 +305,10 @@ No cloud services. No database. No framework. Everything runs from your Mac.
 
 ## Status
 
-- **17+ commits**, private → public at submission
-- **18 unit tests**, all passing
-- **Live end-to-end validated** on the author's own Gmail inbox
-- **2 demo cards received + approved** via Telegram during live testing
+- **Production-ready.** Daemon + setup wizard + interactive dashboard + idempotent label chain.
+- **25 unit tests, all passing** — lifecycle, card store, normalizer, research, injection guard.
+- **Live end-to-end** on the author's own Gmail inbox since day 2.
+- **Real approvals shipped through Telegram** during development — see `docs/assets/`.
 
 ## License
 

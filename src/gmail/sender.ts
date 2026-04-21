@@ -23,6 +23,7 @@ export async function sendReply(args: SendReplyArgs): Promise<string> {
   const sentLabelId = labels[LABELS.SENT];
   const processedLabelId = labels[LABELS.PROCESSED];
   const queuedLabelId = labels[LABELS.QUEUED];
+  const escalatedLabelId = labels[LABELS.ESCALATED];
 
   const parentMsgId = await fetchRfcMessageId(gmail, args.inReplyToMessageId);
   const raw = buildRfc822(args, parentMsgId);
@@ -37,10 +38,14 @@ export async function sendReply(args: SendReplyArgs): Promise<string> {
 
   // Move the original from QUEUED → PROCESSED + SENT. This is the commit
   // point: once labels flip, the pipeline will not reprocess the message.
+  // Also strip ESCALATED (if the founder approved from a Telegram card) so
+  // the "still pending" filter in Gmail stops showing this thread.
   const addLabelIds = [processedLabelId, sentLabelId].filter(
     (id): id is string => Boolean(id),
   );
-  const removeLabelIds = queuedLabelId ? [queuedLabelId] : [];
+  const removeLabelIds = [queuedLabelId, escalatedLabelId].filter(
+    (id): id is string => Boolean(id),
+  );
 
   await gmail.users.messages.modify({
     userId: "me",
