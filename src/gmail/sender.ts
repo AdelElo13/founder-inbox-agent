@@ -1,6 +1,6 @@
 import type { gmail_v1 } from "googleapis";
 import { getGmailClient } from "./auth.ts";
-import { LABELS, ensureLabels } from "./labels.ts";
+import { markMessageTerminal } from "./lifecycle.ts";
 
 interface SendReplyArgs {
   threadId: string;
@@ -16,14 +16,17 @@ interface SendReplyArgs {
  * Sends a plain-text reply threaded onto an existing conversation. Gmail
  * threads on Message-Id: we pull the In-Reply-To/References from the parent
  * so the reply appears in the same thread on recipient clients too.
+ *
+ * Critical invariant: once the send succeeds, this function MUST return
+ * success. Previously the label mutation ran inline and could throw after
+ * a successful send (e.g. transient 429 on the modify call), which the
+ * Telegram bot would surface as "send failed" — causing the founder to
+ * re-tap Approve and double-send the email. Label work is now routed
+ * through `markMessageTerminal` which is best-effort: warn-and-swallow
+ * on failure, never propagate.
  */
 export async function sendReply(args: SendReplyArgs): Promise<string> {
   const gmail = args.gmail ?? getGmailClient();
-  const labels = await ensureLabels(gmail);
-  const sentLabelId = labels[LABELS.SENT];
-  const processedLabelId = labels[LABELS.PROCESSED];
-  const queuedLabelId = labels[LABELS.QUEUED];
-  const escalatedLabelId = labels[LABELS.ESCALATED];
 
   const parentMsgId = await fetchRfcMessageId(gmail, args.inReplyToMessageId);
   const raw = buildRfc822(args, parentMsgId);
@@ -36,22 +39,9 @@ export async function sendReply(args: SendReplyArgs): Promise<string> {
     },
   });
 
-  // Move the original from QUEUED → PROCESSED + SENT. This is the commit
-  // point: once labels flip, the pipeline will not reprocess the message.
-  // Also strip ESCALATED (if the founder approved from a Telegram card) so
-  // the "still pending" filter in Gmail stops showing this thread.
-  const addLabelIds = [processedLabelId, sentLabelId].filter(
-    (id): id is string => Boolean(id),
-  );
-  const removeLabelIds = [queuedLabelId, escalatedLabelId].filter(
-    (id): id is string => Boolean(id),
-  );
-
-  await gmail.users.messages.modify({
-    userId: "me",
-    id: args.inReplyToMessageId,
-    requestBody: { addLabelIds, removeLabelIds },
-  });
+  // Best-effort — any label mutation failure is logged inside the helper.
+  // Never propagates, so the caller's "send succeeded" contract holds.
+  await markMessageTerminal(args.inReplyToMessageId, "sent", { gmail });
 
   return sent.data.id ?? "";
 }
@@ -77,12 +67,16 @@ function buildRfc822(args: SendReplyArgs, parentRfcId: string | null): string {
   const threadSubject = args.subject.startsWith("Re:")
     ? args.subject
     : `Re: ${args.subject}`;
+  // Content-Transfer-Encoding: 8bit — 7bit silently corrupts any non-ASCII
+  // byte, which breaks Dutch-English names, smart quotes, and emojis in
+  // drafts or the founder's edits. 8bit is RFC-2045 compliant and
+  // accepted by every modern MTA / IMAP client.
   const headers = [
     `To: ${args.to}`,
     `Subject: ${threadSubject}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: 7bit",
+    "Content-Transfer-Encoding: 8bit",
   ];
   if (parentRfcId) {
     headers.push(`In-Reply-To: ${parentRfcId}`);

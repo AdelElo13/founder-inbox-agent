@@ -108,8 +108,24 @@ function applyFilters(events, filters) {
     if (filters.intents.size > 0 && !filters.intents.has(e.intent)) return false;
     if (filters.decisions.size > 0 && !filters.decisions.has(e.decision)) return false;
     if (q.length > 0) {
+      // Search hits every text surface a judge might look for during a demo
+      // — including the actual draft and cited claims, so queries like
+      // "hallucinated X" or "verdanthq" find the evidence row directly.
+      const claimsText = (e.claims || [])
+        .map((c) => {
+          const cites = (c.cites || [])
+            .map((ct) => (ct.excerpt || "") + " " + (ct.refId || ""))
+            .join(" ");
+          return (c.textMatch || "") + " " + cites;
+        })
+        .join(" ");
       const hay =
-        (e.subject || "") + " " + (e.from || "") + " " + (e.classifierReasoning || "");
+        (e.subject || "") + " " +
+        (e.from || "") + " " +
+        (e.classifierReasoning || "") + " " +
+        (e.draftBody || "") + " " +
+        (e.inboundPreview || "") + " " +
+        claimsText;
       if (!hay.toLowerCase().includes(q)) return false;
     }
     return true;

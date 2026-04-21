@@ -7,6 +7,7 @@ import { plan } from "./agents/planner.ts";
 import { gate } from "./confidence/gate.ts";
 import { researchSender } from "./research/sender.ts";
 import { markMessageTerminal } from "./gmail/lifecycle.ts";
+import { sendReply } from "./gmail/sender.ts";
 import { recordPipelineOutcome } from "./metrics/events.ts";
 import { scanForInjection } from "./security/injection.ts";
 import { surfaceForApproval } from "./telegram/bot.ts";
@@ -166,8 +167,40 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
 
   const elapsed = Date.now() - started;
 
+  // When the confidence gate green-lights auto_send we ship the reply
+  // without a Telegram round-trip. Failure of the send falls back to
+  // escalation so the founder still sees the draft and can retry/edit —
+  // we never silently drop a reply that the gate chose to send.
+  let autoSendSucceeded = false;
+  let effectiveDecision: GateDecision = decision;
+  if (decision.type === "auto_send" && verified.body.length > 0) {
+    try {
+      await sendReply({
+        threadId: msg.threadId,
+        inReplyToMessageId: msg.id,
+        to: msg.from.email,
+        subject: msg.subject,
+        body: verified.body,
+      });
+      autoSendSucceeded = true;
+      console.log(
+        `[pipeline] msg=${msg.id} intent=${intent.label} → auto_send OK elapsed_ms=${elapsed}`,
+      );
+    } catch (err) {
+      console.warn(
+        `[pipeline] msg=${msg.id} auto_send FAILED — falling back to escalate:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      effectiveDecision = {
+        type: "escalate",
+        plan: action,
+        reason: `auto_send failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
   let telegramCardId: string | undefined;
-  if (decision.type === "escalate" && telegramEnabled()) {
+  if (effectiveDecision.type === "escalate" && telegramEnabled()) {
     try {
       const item = await surfaceForApproval({
         id: `${msg.id}-${started}`,
@@ -186,10 +219,11 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
     } catch (err) {
       console.warn(`[pipeline] telegram surface failed for ${msg.id}:`, err);
     }
-  } else {
+  } else if (!autoSendSucceeded && effectiveDecision.type !== "auto_send") {
+    // drop / escalate-without-telegram path: log once, no send
     console.log(
       `[pipeline] msg=${msg.id} intent=${intent.label} verified=${verified.verifierPass} ` +
-        `decision=${decision.type} elapsed_ms=${elapsed}`,
+        `decision=${effectiveDecision.type} elapsed_ms=${elapsed}`,
     );
   }
 
@@ -201,18 +235,20 @@ async function processMessage(msg: UnifiedMessage): Promise<void> {
     researchUrls: research ? Object.keys(research.snippets).length : 0,
     draft: verified,
     plan: action,
-    decision,
+    decision: effectiveDecision,
     elapsedMs: elapsed,
     ...(telegramCardId && { telegramCardId }),
   });
 
   // Close the label loop so INBOX_AGENT_QUEUED never dangles:
-  //   drop     → move to PROCESSED (noise is terminal for us)
-  //   escalate → keep QUEUED, add ESCALATED marker so the founder can filter
-  //   auto_send→ sender.ts already flips -QUEUED +PROCESSED +SENT on success
-  if (decision.type === "drop") {
+  //   drop      → move to PROCESSED
+  //   auto_send → sender.ts already flipped -QUEUED +PROCESSED +SENT via
+  //               markMessageTerminal("sent"); nothing to do here
+  //   escalate  → keep QUEUED, add ESCALATED marker
+  if (effectiveDecision.type === "drop") {
     await markMessageTerminal(msg.id, "dropped");
-  } else if (decision.type === "escalate") {
+  } else if (effectiveDecision.type === "escalate") {
     await markMessageTerminal(msg.id, "escalated");
   }
+  // auto_send success path already labelled by sender.ts; no-op here.
 }
