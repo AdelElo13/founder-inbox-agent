@@ -4,12 +4,14 @@
 > Every reply cites a specific line in your relationship memory.
 > Nothing auto-sent, nothing hallucinated.
 
-Built for **Cerebral Valley × Anthropic "Built with Opus 4.7" hackathon** (Apr 21–26, 2026).
+One-command setup (`pnpm setup` runs six green-light pre-flight checks).
+Background daemon polls Gmail every 30s. Evidence-grounded drafts land on your
+Telegram for one-tap Approve / Reject / Edit. Running live on the author's own
+Gmail inbox — not a demo, a working tool.
 
-Not a demo — a **fully working product**. One-command setup (`pnpm setup` runs six
-green-light pre-flight checks). Background daemon polls Gmail every 30s. Evidence-grounded
-drafts land on your Telegram for one-tap approval. Live on the author's own Gmail inbox
-since day 2.
+Originally built for the Cerebral Valley × Anthropic _Built with Opus 4.7_
+hackathon (Apr 2026). We weren't in the selected 500, so it's public as an
+indie-ship instead of a submission.
 
 ---
 
@@ -167,7 +169,7 @@ The dashboard at `http://localhost:4321` shows the live numbers.
 
 ### Prerequisites
 - Node.js 22+ · pnpm
-- Anthropic API key (hackathon credits work)
+- Anthropic API key (any tier — budget use stays well under a dollar a day)
 - Google Cloud project with Gmail API + OAuth Desktop client
 - Telegram bot token (`@BotFather`) + your numeric chat id (`@userinfobot`)
 
@@ -312,4 +314,4 @@ No cloud services. No database. No framework. Everything runs from your Mac.
 
 ## License
 
-Post-hackathon: TBD. Currently unlicensed.
+MIT — see [LICENSE](./LICENSE). Fork it, adapt it, ship your own version.
